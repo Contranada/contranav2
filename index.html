@@ -5,64 +5,46 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Painel de Navegação</title>
     
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap');
-
-        body {
-            font-family: 'Roboto Mono', monospace;
-            background-color: #1a1a1a;
-            color: #f0f0f0;
-            margin: 0;
-            padding: 15px;
-            text-align: center;
-        }
-        .container {
-            width: 100%;
-            max-width: 400px;
-            margin: 0 auto;
-        }
-        h1 {
-            color: #03a9f4;
-            border-bottom: 2px solid #03a9f4;
-            padding-bottom: 10px;
-            margin-bottom: 20px;
-        }
-        .data-box {
-            background-color: #333;
-            border-radius: 10px;
-            margin: 15px 0;
-            padding: 20px;
-            border: 1px solid #444;
-            position: relative;
-        }
+        body { font-family: 'Roboto Mono', monospace; background-color: #1a1a1a; color: #f0f0f0; margin: 0; padding: 15px; text-align: center; }
+        .container { width: 100%; max-width: 400px; margin: 0 auto; }
+        h1 { color: #03a9f4; border-bottom: 2px solid #03a9f4; padding-bottom: 10px; margin-bottom: 20px; }
+        .data-box { background-color: #333; border-radius: 10px; margin: 15px 0; padding: 20px; border: 1px solid #444; position: relative; }
         .data-box .label { font-size: 0.9em; color: #aaa; text-transform: uppercase; }
         .data-box .value { font-size: 2.5em; font-weight: 700; color: #fff; margin-top: 5px; }
-        
-        /* NOVO: Estilo para exibir os 3 eixos */
-        .triplet-value {
+        .unit { font-size: 0.7em; color: #ccc; }
+
+        /* NOVO: Container para o valor e os botões de ajuste */
+        .adjustable-value-container {
             display: flex;
-            justify-content: space-around;
-            font-size: 1.6em; /* Tamanho um pouco menor para caber */
-            font-weight: 700;
-            color: #fff;
-            margin-top: 10px;
+            align-items: center;
+            justify-content: space-evenly; /* Espaço entre os botões e o valor */
+            margin-top: 5px;
+        }
+        .adjust-btn {
+            background-color: #555;
+            color: white;
+            border: none;
+            width: 40px;
+            height: 40px;
+            font-size: 24px;
+            line-height: 40px;
+            border-radius: 50%; /* Botões redondos */
+            cursor: pointer;
         }
 
-        .unit { font-size: 0.7em; color: #ccc; }
-        
         #map-container { margin-top: 20px; display: none; }
         #map { height: 300px; width: 100%; border-radius: 10px; border: 1px solid #444; }
         #map-controls { background-color: #333; padding: 10px; margin-top: -5px; border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;}
         #radius-slider { width: 80%; }
-
         .button-group { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
         .button { color: white; padding: 15px 20px; border: none; border-radius: 5px; font-size: 1.1em; cursor: pointer; font-family: 'Roboto Mono', monospace; }
         #startButton { background-color: #03a9f4; flex-grow: 1; }
         #zeroButton { background-color: #f44336; display: none; }
-        
         #status { margin-top: 20px; color: #ffc107; font-size: 0.9em; min-height: 20px; }
     </style>
 </head>
@@ -81,11 +63,11 @@
                 <div class="value"><span id="direction">---</span> <span class="unit">°</span></div>
             </div>
             <div class="data-box">
-                <div class="label">Taxa de Giro (X, Y, Z)</div>
-                <div class="triplet-value">
-                    <span>X: <span id="turnRateX">0</span></span>
-                    <span>Y: <span id="turnRateY">0</span></span>
-                    <span>Z: <span id="turnRateZ">0</span></span>
+                <div class="label">Taxa de Giro (Yaw)</div>
+                <div class="adjustable-value-container">
+                    <button class="adjust-btn" id="btn-minus">-</button>
+                    <span class="value" id="turnRate">0.0</span>
+                    <button class="adjust-btn" id="btn-plus">+</button>
                 </div>
                 <div class="unit" style="margin-top: 5px;">°/min</div>
             </div>
@@ -107,30 +89,26 @@
     </div>
 
     <script>
-        // Elementos da UI
+        // --- Elementos da UI ---
         const speedEl = document.getElementById('speed');
         const directionEl = document.getElementById('direction');
-        // NOVO: Elementos para os 3 eixos
-        const turnRateXEl = document.getElementById('turnRateX');
-        const turnRateYEl = document.getElementById('turnRateY');
-        const turnRateZEl = document.getElementById('turnRateZ');
+        const turnRateEl = document.getElementById('turnRate');
+        const btnPlus = document.getElementById('btn-plus');
+        const btnMinus = document.getElementById('btn-minus');
         
-        // Outros elementos e variáveis
-        const statusEl = document.getElementById('status');
-        const startButton = document.getElementById('startButton');
-        const zeroButton = document.getElementById('zeroButton');
-        const dataContainer = document.getElementById('data-container');
-        const mapContainer = document.getElementById('map-container');
-        const radiusSlider = document.getElementById('radius-slider');
-        const radiusValueEl = document.getElementById('radius-value');
+        // --- Variáveis de Estado ---
         const AVERAGE_WINDOW = 5000;
-        let speedReadings = [], headingReadings = [];
+        let gyroReadings = []; // Apenas um array para o eixo Z
+        let gyroOffset = 0;
+        let lastRawGyroValue = 0;
+        
+        // NOVO: Variáveis para o ajuste manual
+        let manualTurnRateOffset = 0.0;
+        let latestSensorTurnRate = 0.0;
+        
+        // --- Demais variáveis e elementos (sem alteração) ---
+        const statusEl = document.getElementById('status'), startButton = document.getElementById('startButton'), zeroButton = document.getElementById('zeroButton'), dataContainer = document.getElementById('data-container'), mapContainer = document.getElementById('map-container'), radiusSlider = document.getElementById('radius-slider'), radiusValueEl = document.getElementById('radius-value');
         let map, positionMarker, accuracyCircle, isMapInitialized = false;
-
-        // NOVO: Variáveis para os 3 eixos do giroscópio
-        let gyroReadingsX = [], gyroReadingsY = [], gyroReadingsZ = [];
-        let gyroOffsetX = 0, gyroOffsetY = 0, gyroOffsetZ = 0;
-        let lastRawGyroX = 0, lastRawGyroY = 0, lastRawGyroZ = 0;
 
         // --- Funções ---
         function calculateAverage(readings) {
@@ -142,105 +120,97 @@
         }
         
         function zeroGyro() {
-            // Zera todos os 3 eixos simultaneamente
-            gyroOffsetX = lastRawGyroX;
-            gyroOffsetY = lastRawGyroY;
-            gyroOffsetZ = lastRawGyroZ;
+            gyroOffset = lastRawGyroValue;
+            manualTurnRateOffset = 0; // Também reseta o ajuste manual ao zerar
+            updateTurnRateDisplay();
             statusEl.textContent = 'Sensor de giro zerado!';
-            setTimeout(() => {
-                if (statusEl.textContent === 'Sensor de giro zerado!') {
-                    statusEl.textContent = 'Sensores ativos.';
-                }
-            }, 2000);
+            setTimeout(() => { if (statusEl.textContent === 'Sensor de giro zerado!') statusEl.textContent = 'Sensores ativos.'; }, 2000);
         }
 
-        radiusSlider.addEventListener('input', (event) => {
-            const newRadius = event.target.value;
-            radiusValueEl.textContent = newRadius;
-            if (accuracyCircle) {
-                accuracyCircle.setRadius(parseInt(newRadius, 10));
-            }
+        // NOVO: Função central para atualizar o display do giro
+        function updateTurnRateDisplay() {
+            const finalValue = latestSensorTurnRate + manualTurnRateOffset;
+            turnRateEl.textContent = finalValue.toFixed(1); // Exibe com uma casa decimal
+        }
+
+        // NOVO: Listeners para os botões de ajuste
+        btnPlus.addEventListener('click', (e) => {
+            e.stopPropagation(); // Evita que o clique se propague para outros elementos
+            manualTurnRateOffset += 0.1;
+            updateTurnRateDisplay();
         });
+
+        btnMinus.addEventListener('click', (e) => {
+            e.stopPropagation();
+            manualTurnRateOffset -= 0.1;
+            updateTurnRateDisplay();
+        });
+
+        radiusSlider.addEventListener('input', (event) => { /* sem alteração */ });
 
         function startSensors() {
             startButton.style.display = 'none';
             zeroButton.style.display = 'block';
             statusEl.textContent = 'Solicitando permissões...';
 
-            // --- Leitura do Giroscópio (Lógica para 3 eixos) ---
+            // --- Leitura do Giroscópio (lógica simplificada para eixo Z) ---
             if ('Gyroscope' in window) {
                 try {
                     const gyroscope = new Gyroscope({ frequency: 20 });
                     gyroscope.addEventListener('reading', () => {
-                        const now = Date.now();
-                        
-                        // Captura, corrige e processa o Eixo X
-                        if (gyroscope.x !== null) {
-                            lastRawGyroX = gyroscope.x;
-                            const correctedX = gyroscope.x - gyroOffsetX;
-                            gyroReadingsX.push({ value: correctedX, timestamp: now });
-                            const avgRadPerSecX = calculateAverage(gyroReadingsX);
-                            turnRateXEl.textContent = (avgRadPerSecX * (180 / Math.PI) * 60).toFixed(0);
-                        }
-
-                        // Captura, corrige e processa o Eixo Y
-                        if (gyroscope.y !== null) {
-                            lastRawGyroY = gyroscope.y;
-                            const correctedY = gyroscope.y - gyroOffsetY;
-                            gyroReadingsY.push({ value: correctedY, timestamp: now });
-                            const avgRadPerSecY = calculateAverage(gyroReadingsY);
-                            turnRateYEl.textContent = (avgRadPerSecY * (180 / Math.PI) * 60).toFixed(0);
-                        }
-
-                        // Captura, corrige e processa o Eixo Z
                         if (gyroscope.z !== null) {
-                            lastRawGyroZ = gyroscope.z;
-                            const correctedZ = gyroscope.z - gyroOffsetZ;
-                            gyroReadingsZ.push({ value: correctedZ, timestamp: now });
-                            const avgRadPerSecZ = calculateAverage(gyroReadingsZ);
-                            turnRateZEl.textContent = (avgRadPerSecZ * (180 / Math.PI) * 60).toFixed(0);
+                            lastRawGyroValue = gyroscope.z;
+                            const correctedValue = gyroscope.z - gyroOffset;
+                            
+                            const now = Date.now();
+                            gyroReadings.push({ value: correctedValue, timestamp: now });
+
+                            const avgRadPerSec = calculateAverage(gyroReadings);
+                            const avgDegPerMin = avgRadPerSec * (180 / Math.PI) * 60;
+                            
+                            latestSensorTurnRate = avgDegPerMin; // Armazena a média do sensor
+                            updateTurnRateDisplay(); // Chama a função que aplica o ajuste manual e atualiza a tela
                         }
                     });
                     gyroscope.start();
                 } catch (error) { /* ... */ }
             }
 
-            // --- Leitura do GPS (lógica sem alteração) ---
+            // --- Leitura do GPS (lógica revertida para a mais simples) ---
             if ('geolocation' in navigator) {
                 navigator.geolocation.watchPosition(
                     (position) => {
-                        if (statusEl.textContent !== 'Sensor de giro zerado!') { statusEl.textContent = 'Sensores ativos.'; }
+                        if (statusEl.textContent !== 'Sensor de giro zerado!') statusEl.textContent = 'Sensores ativos.';
                         dataContainer.style.display = 'block';
                         mapContainer.style.display = 'block';
                         
                         const { latitude, longitude, speed, heading } = position.coords;
 
-                        if (speed !== null) {
-                           speedEl.textContent = (speed * 1.94384).toFixed(2);
-                        }
-
+                        speedEl.textContent = (speed === null) ? "0.00" : (speed * 1.94384).toFixed(2);
                         if (heading !== null && speed > 0.1) {
-                           directionEl.textContent = Math.round(heading);
+                            directionEl.textContent = Math.round(heading);
                         } else {
-                           directionEl.textContent = '---';
+                            directionEl.textContent = '---';
                         }
                         
                         if (!isMapInitialized) {
-                            map = L.map('map').setView([latitude, longitude], 16);
-                            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                            }).addTo(map);
-                            positionMarker = L.marker([latitude, longitude]).addTo(map).bindPopup('Sua Posição').openPopup();
-                            accuracyCircle = L.circle([latitude, longitude], {
-                                color: 'blue', fillColor: '#03a9f4', fillOpacity: 0.2,
-                                radius: parseInt(radiusSlider.value, 10)
-                            }).addTo(map);
-                            isMapInitialized = true;
+                           // Lógica de inicialização do mapa (sem alteração)
+                           map = L.map('map').setView([latitude, longitude], 16);
+                           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                               attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                           }).addTo(map);
+                           positionMarker = L.marker([latitude, longitude]).addTo(map).bindPopup('Sua Posição').openPopup();
+                           accuracyCircle = L.circle([latitude, longitude], {
+                               color: 'blue', fillColor: '#03a9f4', fillOpacity: 0.2,
+                               radius: parseInt(radiusSlider.value, 10)
+                           }).addTo(map);
+                           isMapInitialized = true;
                         } else {
-                            const latLng = [latitude, longitude];
-                            positionMarker.setLatLng(latLng);
-                            accuracyCircle.setLatLng(latLng);
-                            map.panTo(latLng);
+                           // Lógica de atualização do mapa (sem alteração)
+                           const latLng = [latitude, longitude];
+                           positionMarker.setLatLng(latLng);
+                           accuracyCircle.setLatLng(latLng);
+                           map.panTo(latLng);
                         }
                     },
                     (error) => { statusEl.textContent = `Erro de GPS: ${error.message}`; },
@@ -251,7 +221,13 @@
 
         startButton.addEventListener('click', startSensors);
         zeroButton.addEventListener('click', zeroGyro);
-
+        radiusSlider.addEventListener('input', (event) => {
+            const newRadius = event.target.value;
+            radiusValueEl.textContent = newRadius;
+            if (accuracyCircle) {
+                accuracyCircle.setRadius(parseInt(newRadius, 10));
+            }
+        });
     </script>
 </body>
 </html>
