@@ -14,26 +14,37 @@
         html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; background-color: #1a1a1a; }
         body { font-family: 'Roboto Mono', monospace; }
         
+        /* Tela de Seleção Inicial */
+        #map-choice-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 10; background-color: #1a1a1a;
+            display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; color: #fff;
+        }
+        #map-choice-overlay h1 { color: #03a9f4; margin-bottom: 30px; }
+        #map-choice-overlay .map-option {
+            background-color: #333; color: #fff; border: 1px solid #555;
+            padding: 20px 30px; margin: 10px; border-radius: 8px;
+            font-size: 1.2em; cursor: pointer; width: 80%; max-width: 300px;
+        }
+        #map-choice-overlay .map-option:hover { background-color: #444; }
+
+        /* Container do App Principal (começa escondido) */
+        .main-app-container { display: none; }
         #map { position: absolute; top: 0; left: 0; height: 100%; width: 100%; z-index: 1; }
         .overlay-container { position: absolute; top: 0; left: 0; height: 100%; width: 100%; z-index: 2; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; }
         
+        /* Estilos dos Componentes da UI */
         #data-container { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; padding: 5px; background-color: rgba(26, 26, 26, 0.85); pointer-events: auto; }
         .data-box { background-color: #333; border-radius: 8px; padding: 5px 10px; border: 1px solid #444; width: auto; }
         .data-box-header { display: flex; justify-content: space-between; align-items: center; gap: 15px; }
         .data-box .label { font-size: 0.7em; color: #aaa; text-transform: uppercase; }
         .data-box .value { font-size: 1.6em; font-weight: 700; color: #fff; }
         .unit { font-size: 0.6em; color: #ccc; }
-        
         .avg-control { font-size: 0.7em; color: #ccc; }
         .avg-control input[type="range"] { width: 80px; height: 10px; vertical-align: middle; }
-
         .adjustable-value-container { display: flex; align-items: center; justify-content: center; gap: 10px; }
         .adjust-btn { background-color: #555; color: white; border: none; width: 30px; height: 30px; font-size: 20px; line-height: 30px; border-radius: 50%; cursor: pointer; }
-
         .footer-controls { padding: 10px; display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: auto; background-color: rgba(26, 26, 26, 0.85); }
-        .button-row { display: flex; gap: 10px; justify-content: center; width: 100%; }
-        .button { color: white; padding: 12px 20px; border: none; border-radius: 5px; font-size: 1.1em; cursor: pointer; background-color: #03a9f4; box-shadow: 0 2px 5px rgba(0,0,0,0.4); flex-grow: 1; }
-        
         #circle-control { width: 100%; max-width: 350px; }
         #radius-slider { width: 100%; }
         .radius-label { font-size: 0.9em; color: #03a9f4; font-weight: bold; }
@@ -41,8 +52,13 @@
     </style>
 </head>
 <body>
+
     <div id="map-choice-overlay">
-        </div>
+        <h1>Escolha o Mapa Base</h1>
+        <div class="map-option" id="start-chart">Carta Náutica 1841</div>
+        <div class="map-option" id="start-osm">OpenStreetMap</div>
+        <div class="map-option" id="start-satellite">Satélite (Esri)</div>
+    </div>
     
     <div class="main-app-container" id="main-app">
         <div id="map"></div>
@@ -65,38 +81,32 @@
         let map, positionMarker, adjustableCircle, velocityVector;
         let isMapInitialized = false;
         let manualTurnRateOffset = 0.0, latestSensorTurnRate = 0.0;
-        
-        // Janelas de média e arrays de leituras individuais
         let speedAvgWindow = 5000, directionAvgWindow = 5000, turnRateAvgWindow = 5000;
         let speedReadings = [], compassHeadingReadings = [], gyroReadings = [], travelHeadingReadings = [];
 
         // --- Elementos da UI ---
         const mapChoiceOverlay = document.getElementById('map-choice-overlay');
         const mainAppContainer = document.getElementById('main-app');
-        const statusEl = document.getElementById('status');
         const dataContainer = document.getElementById('data-container');
-        const circleControl = document.getElementById('circle-control');
-        const radiusSlider = document.getElementById('radius-slider');
-        const radiusValueEl = document.getElementById('radius-value');
 
         // --- Funções Auxiliares ---
         function calculateAverage(readings, windowMs) { const now = Date.now(); const recentReadings = readings.filter(r => now - r.timestamp < windowMs); if (recentReadings.length === 0) return 0; const sum = recentReadings.reduce((acc, r) => acc + r.value, 0); return sum / recentReadings.length; }
         function updateTurnRateDisplay() { const finalValue = latestSensorTurnRate + manualTurnRateOffset; const el = document.getElementById('turnRate'); if(el) el.textContent = finalValue.toFixed(1); }
         function calculateDestinationPoint(lat, lon, bearing, distance) { const R = 6371e3; const latRad = lat * Math.PI / 180; const lonRad = lon * Math.PI / 180; const bearingRad = bearing * Math.PI / 180; const latDestRad = Math.asin(Math.sin(latRad) * Math.cos(distance / R) + Math.cos(latRad) * Math.sin(distance / R) * Math.cos(bearingRad)); const lonDestRad = lonRad + Math.atan2(Math.sin(bearingRad) * Math.sin(distance / R) * Math.cos(latRad), Math.cos(distance / R) - Math.sin(latRad) * Math.sin(latDestRad)); return [(latDestRad * 180 / Math.PI), (lonDestRad * 180 / Math.PI)]; }
 
-        // --- Função Principal ---
+        // --- Função Principal de Inicialização ---
         function startApp() {
             mapChoiceOverlay.style.display = 'none';
             mainAppContainer.style.display = 'block';
-            statusEl.textContent = 'Iniciando sensores...';
             setupUIAndListeners();
+            document.getElementById('status').textContent = 'Iniciando sensores...';
             activateSensors();
         }
 
         function activateSensors() {
             if ('AbsoluteOrientationSensor' in window) activateOrientationSensor();
             if ('Gyroscope' in window) activateGyroscope();
-            if ('geolocation' in navigator) activateGPS(); else statusEl.textContent = 'GPS não suportado.';
+            if ('geolocation' in navigator) activateGPS(); else document.getElementById('status').textContent = 'GPS não suportado.';
         }
 
         function activateOrientationSensor() {
@@ -133,7 +143,7 @@
         function activateGPS() {
             navigator.geolocation.watchPosition(
                 (position) => {
-                    statusEl.textContent = `GPS Ativo (Precisão: ${position.coords.accuracy.toFixed(0)}m)`;
+                    document.getElementById('status').textContent = `GPS Ativo (Precisão: ${position.coords.accuracy.toFixed(0)}m)`;
                     const { latitude, longitude, accuracy, speed, heading } = position.coords;
                     const latLng = [latitude, longitude];
                     
@@ -151,20 +161,40 @@
                     }
                     const avgTravelHeading = calculateAverage(travelHeadingReadings, directionAvgWindow);
 
-                    if (!isMapInitialized) { /* ...código de inicialização do mapa... */ }
-                    else { /* ...código de atualização dos marcadores... */ }
+                    if (!isMapInitialized) {
+                        switch (selectedMapType) {
+                            case 'chart':
+                                const imageUrl = '1841.png'; 
+                                const imageBounds = [[-26.8667, -48.7000], [-26.9500, -48.5500]];
+                                map = L.map('map', { zoomControl: false }).fitBounds(imageBounds);
+                                L.imageOverlay(imageUrl, imageBounds, { attribution: 'Carta Náutica 1841' }).addTo(map);
+                                break;
+                            case 'osm':
+                                map = L.map('map', { zoomControl: false }).setView(latLng, 16);
+                                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(map);
+                                break;
+                            case 'satellite':
+                                map = L.map('map', { zoomControl: false }).setView(latLng, 16);
+                                L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles &copy; Esri' }).addTo(map);
+                                break;
+                        }
+                        positionMarker = L.marker(latLng, { icon: L.icon({ iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png', iconSize: [25, 41], iconAnchor: [12, 41] }) }).addTo(map);
+                        adjustableCircle = L.circle(latLng, { radius: parseInt(document.getElementById('radius-slider').value, 10), weight: 1, color: '#03a9f4', fillOpacity: 0.1 }).addTo(map);
+                        isMapInitialized = true;
+                    } else {
+                        positionMarker.setLatLng(latLng);
+                        adjustableCircle.setLatLng(latLng);
+                        if (selectedMapType !== 'chart') map.panTo(latLng);
+                    }
 
-                    // --- MUDANÇA: Lógica do vetor agora usa as médias ---
                     const avgSpeedMps = avgSpeedKnots / 1.94384;
-                    if (avgSpeedMps > 0.2 && avgTravelHeading > 0) { // Usa limiar menor para velocidade média
-                        const distance = avgSpeedMps * 3 * 60; // Distância para 3 minutos
+                    if (avgSpeedMps > 0.2 && avgTravelHeading > 0) {
+                        const distance = avgSpeedMps * 3 * 60;
                         const destination = calculateDestinationPoint(latitude, longitude, avgTravelHeading, distance);
                         const path = [latLng, destination];
                         if (!velocityVector) {
                             velocityVector = L.polyline(path, { color: '#ff7800', weight: 2 }).addTo(map);
-                            velocityVector.decorator = L.polylineDecorator(velocityVector, {
-                                patterns: [{ offset: '100%', repeat: 0, symbol: L.Symbol.arrowHead({ pixelSize: 12, polygon: false, pathOptions: { color: '#ff7800', stroke: true, weight: 2 } }) }]
-                            }).addTo(map);
+                            velocityVector.decorator = L.polylineDecorator(velocityVector, { patterns: [{ offset: '100%', repeat: 0, symbol: L.Symbol.arrowHead({ pixelSize: 12, polygon: false, pathOptions: { color: '#ff7800', stroke: true, weight: 2 } }) }] }).addTo(map);
                         } else {
                             velocityVector.setLatLngs(path);
                             velocityVector.decorator.setPaths(velocityVector);
@@ -173,46 +203,34 @@
                         if (velocityVector) { map.removeLayer(velocityVector); map.removeLayer(velocityVector.decorator); velocityVector = null; }
                     }
                 },
-                (error) => { statusEl.textContent = `Erro de GPS: ${error.message}`; },
+                (error) => { document.getElementById('status').textContent = `Erro de GPS: ${error.message}`; },
                 { enableHighAccuracy: true, maximumAge: 0 }
             );
         }
 
         function setupUIAndListeners() {
-            mapChoiceOverlay.innerHTML = `<h1>Escolha o Mapa Base</h1><div class="map-option" id="start-chart">Carta Náutica 1841</div><div class="map-option" id="start-osm">OpenStreetMap</div><div class="map-option" id="start-satellite">Satélite (Esri)</div>`;
-            dataContainer.innerHTML = `<div class="data-box"><div class="data-box-header"><div class="label">Velocidade</div><div class="value"><span id="speed">0.00</span><span class="unit"> knots</span></div></div><div class="avg-control">Média: <input type="range" id="speed-avg-slider" min="3" max="10" value="5"> <span id="speed-avg-value">5</span>s</div></div><div class="data-box"><div class="data-box-header"><div class="label">Direção</div><div class="value"><span id="direction">---</span><span class="unit">°</span></div></div><div class="avg-control">Média: <input type="range" id="direction-avg-slider" min="3" max="10" value="5"> <span id="direction-avg-value">5</span>s</div></div><div class="data-box"><div class="data-box-header"><div class="label">Taxa Giro</div><div class="adjustable-value-container"><button class="adjust-btn" id="btn-minus">-</button> <span class="value" id="turnRate">0.0</span> <button class="adjust-btn" id="btn-plus">+</button></div><div class="unit">°/min</div></div><div class="avg-control">Média: <input type="range" id="turnrate-avg-slider" min="3" max="10" value="5"> <span id="turnrate-avg-value">5</span>s</div></div>`;
+            dataContainer.innerHTML = `
+                <div class="data-box"><div class="data-box-header"><div class="label">Velocidade</div><div class="value"><span id="speed">0.00</span><span class="unit"> knots</span></div></div><div class="avg-control">Média: <input type="range" id="speed-avg-slider" min="3" max="10" value="5"> <span id="speed-avg-value">5</span>s</div></div>
+                <div class="data-box"><div class="data-box-header"><div class="label">Direção</div><div class="value"><span id="direction">---</span><span class="unit">°</span></div></div><div class="avg-control">Média: <input type="range" id="direction-avg-slider" min="3" max="10" value="5"> <span id="direction-avg-value">5</span>s</div></div>
+                <div class="data-box"><div class="data-box-header"><div class="label">Taxa Giro</div><div class="adjustable-value-container"><button class="adjust-btn" id="btn-minus">-</button> <span class="value" id="turnRate">0.0</span> <button class="adjust-btn" id="btn-plus">+</button></div><div class="unit">°/min</div></div><div class="avg-control">Média: <input type="range" id="turnrate-avg-slider" min="3" max="10" value="5"> <span id="turnrate-avg-value">5</span>s</div></div>`;
             
             document.getElementById('btn-plus').addEventListener('click', (e) => { e.stopPropagation(); manualTurnRateOffset += 0.1; updateTurnRateDisplay(); });
             document.getElementById('btn-minus').addEventListener('click', (e) => { e.stopPropagation(); manualTurnRateOffset -= 0.1; updateTurnRateDisplay(); });
+            
             document.getElementById('speed-avg-slider').addEventListener('input', (e) => { speedAvgWindow = e.target.value * 1000; document.getElementById('speed-avg-value').textContent = e.target.value; });
             document.getElementById('direction-avg-slider').addEventListener('input', (e) => { directionAvgWindow = e.target.value * 1000; document.getElementById('direction-avg-value').textContent = e.target.value; });
             document.getElementById('turnrate-avg-slider').addEventListener('input', (e) => { turnRateAvgWindow = e.target.value * 1000; document.getElementById('turnrate-avg-value').textContent = e.target.value; });
-            radiusSlider.addEventListener('input', (e) => { radiusValueEl.textContent = e.target.value; if (adjustableCircle) { adjustableCircle.setRadius(parseInt(e.target.value, 10)); } });
-            document.getElementById('start-chart').addEventListener('click', () => { selectedMapType = 'chart'; startApp(); });
-            document.getElementById('start-osm').addEventListener('click', () => { selectedMapType = 'osm'; startApp(); });
-            document.getElementById('start-satellite').addEventListener('click', () => { selectedMapType = 'satellite'; startApp(); });
+
+            document.getElementById('radius-slider').addEventListener('input', (e) => {
+                document.getElementById('radius-value').textContent = e.target.value;
+                if (adjustableCircle) { adjustableCircle.setRadius(parseInt(e.target.value, 10)); }
+            });
         }
         
-        setupUIAndListeners();
-        // Colando o código de inicialização do mapa dentro da função de GPS para garantir a ordem correta de execução
-        const originalWatchPosition = navigator.geolocation.watchPosition;
-        navigator.geolocation.watchPosition = function(success, error, options) {
-            return originalWatchPosition.call(this, (position) => {
-                if (!isMapInitialized) {
-                    const { latitude, longitude } = position.coords;
-                    const latLng = [latitude, longitude];
-                    switch (selectedMapType) {
-                        case 'chart': const imageUrl = '1841.png'; const imageBounds = [[-26.8667, -48.7000], [-26.9500, -48.5500]]; map = L.map('map', { zoomControl: false }).fitBounds(imageBounds); L.imageOverlay(imageUrl, imageBounds).addTo(map); break;
-                        case 'osm': map = L.map('map', { zoomControl: false }).setView(latLng, 16); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map); break;
-                        case 'satellite': map = L.map('map', { zoomControl: false }).setView(latLng, 16); L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}').addTo(map); break;
-                    }
-                    positionMarker = L.marker(latLng, { icon: L.icon({ iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png', iconSize: [25, 41], iconAnchor: [12, 41] }) }).addTo(map);
-                    adjustableCircle = L.circle(latLng, { radius: parseInt(radiusSlider.value, 10), weight: 1, color: '#03a9f4', fillOpacity: 0.1 }).addTo(map);
-                    isMapInitialized = true;
-                }
-                success(position);
-            }, error, options);
-        };
+        // Listeners da Tela de Seleção
+        document.getElementById('start-chart').addEventListener('click', () => { selectedMapType = 'chart'; startApp(); });
+        document.getElementById('start-osm').addEventListener('click', () => { selectedMapType = 'osm'; startApp(); });
+        document.getElementById('start-satellite').addEventListener('click', () => { selectedMapType = 'satellite'; startApp(); });
     </script>
 </body>
 </html>
