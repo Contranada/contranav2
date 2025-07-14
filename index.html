@@ -2,51 +2,223 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Teste de GPS Simples</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Painel de Navegação</title>
     <style>
-        body { font-family: sans-serif; text-align: center; margin-top: 50px; background-color: #f0f0f0; }
-        h1 { color: #333; }
-        #status { font-size: 1.2em; font-weight: bold; margin: 20px; padding: 15px; border-radius: 5px; }
-        #coords { color: #555; }
-        button { padding: 10px 20px; font-size: 1em; cursor: pointer; }
+        @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Roboto Mono', monospace;
+            background-color: #1a1a1a;
+            color: #f0f0f0;
+            margin: 0;
+            padding: 15px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .container {
+            width: 100%;
+            max-width: 400px;
+        }
+        h1 {
+            color: #4caf50;
+            border-bottom: 2px solid #4caf50;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .data-box {
+            background-color: #333;
+            border-radius: 10px;
+            margin: 15px 0;
+            padding: 20px;
+            border: 1px solid #444;
+        }
+        .data-box .label {
+            font-size: 0.9em;
+            color: #aaa;
+            text-transform: uppercase;
+        }
+        .data-box .value {
+            font-size: 2.5em;
+            font-weight: 700;
+            color: #fff;
+            margin-top: 5px;
+        }
+        .unit {
+            font-size: 0.7em;
+            color: #ccc;
+        }
+        #status {
+            margin-top: 20px;
+            color: #ffc107;
+            font-size: 0.9em;
+            min-height: 20px;
+        }
+        #startButton {
+            background-color: #4caf50;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.2em;
+            cursor: pointer;
+            margin-top: 20px;
+            font-family: 'Roboto Mono', monospace;
+        }
     </style>
 </head>
 <body>
-    <h1>Teste de Permissão de GPS</h1>
-    <button id="startButton">Pedir Permissão</button>
-    <p id="status">Aguardando...</p>
-    <p id="coords">Coordenadas aparecerão aqui.</p>
+
+    <div class="container">
+        <h1>Navegação</h1>
+
+        <div id="data-container" style="display: none;">
+            <div class="data-box">
+                <div class="label">Velocidade</div>
+                <div class="value"><span id="speed">0.00</span> <span class="unit">knots</span></div>
+            </div>
+
+            <div class="data-box">
+                <div class="label">Direção Verdadeira</div>
+                <div class="value"><span id="direction">---</span> <span class="unit">°</span></div>
+            </div>
+
+            <div class="data-box">
+                <div class="label">Taxa de Giro (Yaw)</div>
+                <div class="value"><span id="turnRate">0.0</span> <span class="unit">°/s</span></div>
+            </div>
+        </div>
+
+        <button id="startButton">Iniciar Sensores</button>
+        <div id="status">Aguardando início...</div>
+    </div>
 
     <script>
-        const startButton = document.getElementById('startButton');
         const statusEl = document.getElementById('status');
-        const coordsEl = document.getElementById('coords');
+        const startButton = document.getElementById('startButton');
+        const dataContainer = document.getElementById('data-container');
 
-        startButton.addEventListener('click', () => {
-            statusEl.textContent = 'Pedindo permissão...';
-            if (!navigator.geolocation) {
-                statusEl.textContent = 'ERRO: Geolocalização não é suportada por este navegador.';
-                return;
+        const speedEl = document.getElementById('speed');
+        const directionEl = document.getElementById('direction');
+        const turnRateEl = document.getElementById('turnRate');
+
+        const AVERAGE_WINDOW = 5000; // 5 segundos em milissegundos
+
+        let speedReadings = [];
+        let headingReadings = [];
+        let gyroReadings = [];
+
+        function calculateAverage(readings) {
+            const now = Date.now();
+            const recentReadings = readings.filter(r => now - r.timestamp < AVERAGE_WINDOW);
+            if (recentReadings.length === 0) return 0;
+            const sum = recentReadings.reduce((acc, r) => acc + r.value, 0);
+            return sum / recentReadings.length;
+        }
+
+        function startSensors() {
+            startButton.style.display = 'none';
+            statusEl.textContent = 'Solicitando permissões...';
+
+            // --- Permissão e Leitura do Giroscópio ---
+            if ('Gyroscope' in window) {
+                try {
+                    const gyroscope = new Gyroscope({ frequency: 20 }); // Leitura a 20Hz
+
+                    gyroscope.addEventListener('reading', () => {
+                        // O giro (yaw) é geralmente no eixo Z
+                        if (gyroscope.z !== null) {
+                            const now = Date.now();
+                            gyroReadings.push({ value: gyroscope.z, timestamp: now });
+                            // Limpa leituras antigas
+                            gyroReadings = gyroReadings.filter(r => now - r.timestamp < AVERAGE_WINDOW);
+
+                            const avgRadPerSec = calculateAverage(gyroReadings);
+                            const avgDegPerSec = avgRadPerSec * (180 / Math.PI);
+                            turnRateEl.textContent = avgDegPerSec.toFixed(1);
+                        }
+                    });
+
+                    gyroscope.addEventListener('error', event => {
+                        statusEl.textContent = `Erro no Giroscópio: ${event.error.name}, ${event.error.message}`;
+                    });
+
+                    gyroscope.start();
+                } catch (error) {
+                    statusEl.textContent = 'Giroscópio não pôde ser iniciado. O navegador pode não suportá-lo ou a permissão foi negada.';
+                }
+            } else {
+                turnRateEl.textContent = 'N/A';
+                statusEl.textContent = 'Giroscópio não suportado por este navegador.';
             }
 
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    statusEl.style.backgroundColor = '#d4edda';
-                    statusEl.style.color = '#155724';
-                    statusEl.textContent = 'SUCESSO! Permissão concedida.';
-                    const { latitude, longitude } = position.coords;
-                    coordsEl.textContent = `Lat: ${latitude.toFixed(4)}, Lon: ${longitude.toFixed(4)}`;
-                },
-                (error) => {
-                    statusEl.style.backgroundColor = '#f8d7da';
-                    statusEl.style.color = '#721c24';
-                    let errorMsg = `ERRO: ${error.message} (código: ${error.code})`;
-                    statusEl.textContent = errorMsg;
-                },
-                { enableHighAccuracy: true }
-            );
-        });
+            // --- Permissão e Leitura do GPS ---
+            if ('geolocation' in navigator) {
+                navigator.geolocation.watchPosition(
+                    (position) => {
+                        statusEl.textContent = 'Sensores ativos.';
+                        dataContainer.style.display = 'block';
+                        
+                        const { speed, heading } = position.coords;
+                        const now = Date.now();
+
+                        // Velocidade
+                        if (speed !== null) {
+                            // speed é em m/s, converter para knots
+                            const speedInKnots = speed * 1.94384;
+                            speedReadings.push({ value: speedInKnots, timestamp: now });
+                            speedReadings = speedReadings.filter(r => now - r.timestamp < AVERAGE_WINDOW);
+                            const avgSpeed = calculateAverage(speedReadings);
+                            speedEl.textContent = avgSpeed.toFixed(2);
+                        } else {
+                             speedEl.textContent = "0.00";
+                        }
+
+                        // Direção
+                        if (heading !== null && speed > 0.1) { // A direção só é confiável em movimento
+                            headingReadings.push({ value: heading, timestamp: now });
+                            headingReadings = headingReadings.filter(r => now - r.timestamp < AVERAGE_WINDOW);
+                            const avgHeading = calculateAverage(headingReadings);
+                            directionEl.textContent = Math.round(avgHeading);
+                        } else {
+                            directionEl.textContent = '---';
+                        }
+                    },
+                    (error) => {
+                        let errorMsg = '';
+                        switch (error.code) {
+                            case error.PERMISSION_DENIED:
+                                errorMsg = "Permissão para acessar o GPS foi negada.";
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                errorMsg = "Informação de localização indisponível.";
+                                break;
+                            case error.TIMEOUT:
+                                errorMsg = "A requisição de localização expirou.";
+                                break;
+                            default:
+                                errorMsg = "Ocorreu um erro desconhecido no GPS.";
+                                break;
+                        }
+                        statusEl.textContent = errorMsg;
+                    },
+                    {
+                        enableHighAccuracy: true, // Essencial para dados de navegação
+                        maximumAge: 0,
+                        timeout: 10000
+                    }
+                );
+            } else {
+                statusEl.textContent = 'Geolocalização não é suportada por este navegador.';
+            }
+        }
+
+        startButton.addEventListener('click', startSensors);
+
     </script>
 </body>
 </html>
