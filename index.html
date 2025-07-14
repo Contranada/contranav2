@@ -18,15 +18,15 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            min-height: 100vh;
         }
         .container {
             width: 100%;
             max-width: 400px;
         }
         h1 {
-            color: #4caf50;
-            border-bottom: 2px solid #4caf50;
+            color: #03a9f4; /* Cor alterada para azul claro */
+            border-bottom: 2px solid #03a9f4;
             padding-bottom: 10px;
             margin-bottom: 20px;
         }
@@ -59,7 +59,7 @@
             min-height: 20px;
         }
         #startButton {
-            background-color: #4caf50;
+            background-color: #03a9f4;
             color: white;
             padding: 15px 30px;
             border: none;
@@ -89,7 +89,7 @@
 
             <div class="data-box">
                 <div class="label">Taxa de Giro (Yaw)</div>
-                <div class="value"><span id="turnRate">0.0</span> <span class="unit">°/s</span></div>
+                <div class="value"><span id="turnRate">0.0</span> <span class="unit">°/min</span></div>
             </div>
         </div>
 
@@ -127,19 +127,20 @@
             // --- Permissão e Leitura do Giroscópio ---
             if ('Gyroscope' in window) {
                 try {
-                    const gyroscope = new Gyroscope({ frequency: 20 }); // Leitura a 20Hz
+                    const gyroscope = new Gyroscope({ frequency: 20 });
 
                     gyroscope.addEventListener('reading', () => {
-                        // O giro (yaw) é geralmente no eixo Z
                         if (gyroscope.z !== null) {
                             const now = Date.now();
                             gyroReadings.push({ value: gyroscope.z, timestamp: now });
-                            // Limpa leituras antigas
                             gyroReadings = gyroReadings.filter(r => now - r.timestamp < AVERAGE_WINDOW);
 
                             const avgRadPerSec = calculateAverage(gyroReadings);
                             const avgDegPerSec = avgRadPerSec * (180 / Math.PI);
-                            turnRateEl.textContent = avgDegPerSec.toFixed(1);
+                            
+                            // --- ALTERAÇÃO PRINCIPAL AQUI ---
+                            const avgDegPerMin = avgDegPerSec * 60; // Converte de °/s para °/min
+                            turnRateEl.textContent = avgDegPerMin.toFixed(0); // Exibe como número inteiro
                         }
                     });
 
@@ -149,7 +150,7 @@
 
                     gyroscope.start();
                 } catch (error) {
-                    statusEl.textContent = 'Giroscópio não pôde ser iniciado. O navegador pode não suportá-lo ou a permissão foi negada.';
+                    statusEl.textContent = 'Giroscópio não pôde ser iniciado. Verifique as permissões de sensores de movimento.';
                 }
             } else {
                 turnRateEl.textContent = 'N/A';
@@ -168,7 +169,6 @@
 
                         // Velocidade
                         if (speed !== null) {
-                            // speed é em m/s, converter para knots
                             const speedInKnots = speed * 1.94384;
                             speedReadings.push({ value: speedInKnots, timestamp: now });
                             speedReadings = speedReadings.filter(r => now - r.timestamp < AVERAGE_WINDOW);
@@ -179,7 +179,7 @@
                         }
 
                         // Direção
-                        if (heading !== null && speed > 0.1) { // A direção só é confiável em movimento
+                        if (heading !== null && speed > 0.1) {
                             headingReadings.push({ value: heading, timestamp: now });
                             headingReadings = headingReadings.filter(r => now - r.timestamp < AVERAGE_WINDOW);
                             const avgHeading = calculateAverage(headingReadings);
@@ -207,7 +207,7 @@
                         statusEl.textContent = errorMsg;
                     },
                     {
-                        enableHighAccuracy: true, // Essencial para dados de navegação
+                        enableHighAccuracy: true,
                         maximumAge: 0,
                         timeout: 10000
                     }
