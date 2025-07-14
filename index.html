@@ -3,207 +3,107 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Painel de Navegação</title>
+    <title>Painel de Navegação com Carta 1841</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap');
-        body { font-family: 'Roboto Mono', monospace; background-color: #1a1a1a; color: #f0f0f0; margin: 0; padding: 15px; text-align: center; }
-        .container { width: 100%; max-width: 400px; margin: 0 auto; }
-        h1 { color: #03a9f4; border-bottom: 2px solid #03a9f4; padding-bottom: 10px; margin-bottom: 20px; }
-        .data-box { background-color: #333; border-radius: 10px; margin: 15px 0; padding: 20px; border: 1px solid #444; position: relative; }
-        .data-box .label { font-size: 0.9em; color: #aaa; text-transform: uppercase; }
-        .data-box .value { font-size: 2.5em; font-weight: 700; color: #fff; margin-top: 5px; }
-        .unit { font-size: 0.7em; color: #ccc; }
-        .adjustable-value-container { display: flex; align-items: center; justify-content: space-evenly; margin-top: 5px; }
-        .adjust-btn { background-color: #555; color: white; border: none; width: 40px; height: 40px; font-size: 24px; line-height: 40px; border-radius: 50%; cursor: pointer; }
-        #map-container { margin-top: 20px; display: none; }
-        #map { height: 300px; width: 100%; border-radius: 10px; border: 1px solid #444; }
-        #map-controls { background-color: #333; padding: 10px; margin-top: -5px; border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;}
-        #radius-slider { width: 80%; }
-        .button-group { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
-        .button { color: white; padding: 15px 20px; border: none; border-radius: 5px; font-size: 1.1em; cursor: pointer; font-family: 'Roboto Mono', monospace; }
-        #startButton { background-color: #03a9f4; flex-grow: 1; }
-        #zeroButton { background-color: #f44336; display: none; }
-        #status { margin-top: 20px; color: #ffc107; font-size: 0.9em; min-height: 20px; }
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* Evita barras de rolagem */
+        }
+        body {
+            font-family: 'Roboto Mono', monospace;
+            background-color: #1a1a1a;
+            color: #f0f0f0;
+            display: flex;
+            flex-direction: column;
+        }
+        .container {
+            width: 100%;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1; /* Faz o container ocupar o espaço disponível */
+        }
+        .header {
+            text-align: center;
+            padding: 10px;
+        }
+        h1 {
+            color: #03a9f4;
+            margin: 0;
+            font-size: 1.5em;
+        }
+        #map-container {
+            flex-grow: 1; /* Faz o mapa ocupar o máximo de espaço vertical */
+            display: none;
+        }
+        #map {
+            height: 100%; /* Ocupa 100% do container pai */
+            width: 100%;
+            background-color: #555;
+        }
+        .footer {
+            padding: 15px;
+            text-align: center;
+            background-color: #222;
+        }
+        .button {
+            color: white;
+            padding: 15px 25px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.1em;
+            cursor: pointer;
+            font-family: 'Roboto Mono', monospace;
+            background-color: #03a9f4;
+        }
+        #status {
+            margin-top: 10px;
+            color: #ffc107;
+            font-size: 0.9em;
+            min-height: 20px;
+        }
     </style>
 </head>
 <body>
 
     <div class="container">
-        <h1>Navegação</h1>
-
-        <div id="data-container" style="display: none;">
-            <div class="data-box">
-                <div class="label">Velocidade</div>
-                <div class="value"><span id="speed">0.00</span> <span class="unit">knots</span></div>
-            </div>
-            <div class="data-box">
-                <div class="label">Direção (Bússola)</div>
-                <div class="value"><span id="direction">---</span> <span class="unit">°</span></div>
-            </div>
-            <div class="data-box">
-                <div class="label">Taxa de Giro (Giroscópio)</div>
-                <div class="adjustable-value-container">
-                    <button class="adjust-btn" id="btn-minus">-</button>
-                    <span class="value" id="turnRate">0.0</span>
-                    <button class="adjust-btn" id="btn-plus">+</button>
-                </div>
-                <div class="unit" style="margin-top: 5px;">°/min</div>
-            </div>
+        <div class="header">
+            <h1>Navegação - Carta 1841</h1>
+            <div id="status">Aguardando início...</div>
         </div>
 
         <div id="map-container">
-            </div>
-        
-        <div class="button-group">
-            <button id="startButton" class="button">Iniciar Sensores</button>
-            <button id="zeroButton" class="button">Zerar Giro</button>
+            <div id="map"></div>
         </div>
-        <div id="status">Aguardando início...</div>
+        
+        <div class="footer">
+            <button id="startButton" class="button">Iniciar Navegação</button>
+        </div>
     </div>
 
     <script>
         // --- Elementos da UI ---
-        const speedEl = document.getElementById('speed');
-        const directionEl = document.getElementById('direction');
-        const turnRateEl = document.getElementById('turnRate');
-        const btnPlus = document.getElementById('btn-plus');
-        const btnMinus = document.getElementById('btn-minus');
+        const statusEl = document.getElementById('status');
+        const startButton = document.getElementById('startButton');
+        const mapContainer = document.getElementById('map-container');
         
-        // --- Constantes e Variáveis de Estado ---
-        const AVERAGE_WINDOW = 5000;
-        let gyroReadings = [], gyroOffset = 0, lastRawGyroValue = 0;
-        let manualTurnRateOffset = 0.0, latestSensorTurnRate = 0.0;
-        
-        const statusEl = document.getElementById('status'), startButton = document.getElementById('startButton'), zeroButton = document.getElementById('zeroButton'), dataContainer = document.getElementById('data-container'), mapContainer = document.getElementById('map-container'), radiusSlider = document.getElementById('radius-slider'), radiusValueEl = document.getElementById('radius-value');
-        let map, positionMarker, accuracyCircle, isMapInitialized = false;
-
-        // --- Funções ---
-        function calculateAverage(readings) { /* ... sem alteração ... */ }
-        function zeroGyro() { /* ... sem alteração ... */ }
-        function updateTurnRateDisplay() { /* ... sem alteração ... */ }
+        // --- Variáveis de Estado ---
+        let map, positionMarker, accuracyCircle;
+        let isMapInitialized = false;
 
         function startSensors() {
             startButton.style.display = 'none';
-            zeroButton.style.display = 'block';
-            statusEl.textContent = 'Solicitando permissões...';
+            mapContainer.style.display = 'block';
+            statusEl.textContent = 'Solicitando permissão de GPS...';
 
-            // --- NOVO: Sensor de Orientação Absoluta (Bússola Estabilizada) ---
-            try {
-                if ('AbsoluteOrientationSensor' in window) {
-                    const orientationSensor = new AbsoluteOrientationSensor({ frequency: 20 });
-                    orientationSensor.addEventListener('reading', () => {
-                        // O sensor nos dá um "quaternion", que é uma forma matemática de representar a rotação 3D.
-                        const quaternion = orientationSensor.quaternion;
-                        if (!quaternion) return;
-
-                        // Convertemos o quaternion para um ângulo de direção (Azimute/Yaw)
-                        let yawRad = Math.atan2(2 * (quaternion[3] * quaternion[2] + quaternion[0] * quaternion[1]), 1 - 2 * (quaternion[1] * quaternion[1] + quaternion[2] * quaternion[2]));
-                        let yawDeg = yawRad * (180 / Math.PI);
-
-                        // O resultado do Azimute pode ser de -180 a 180. Ajustamos para 0 a 360°.
-                        if (yawDeg < 0) {
-                            yawDeg += 360;
-                        }
-
-                        directionEl.textContent = Math.round(yawDeg);
-                    });
-                    orientationSensor.start();
-                } else {
-                    // Fallback para o GPS se o sensor avançado não estiver disponível
-                    directionEl.parentElement.querySelector('.label').textContent = 'Direção (GPS)';
-                }
-            } catch (error) {
-                statusEl.textContent = 'Erro ao iniciar sensor de orientação.';
-                directionEl.parentElement.querySelector('.label').textContent = 'Direção (GPS)';
-            }
-
-            // --- Leitura do Giroscópio (sem filtro, como solicitado) ---
-            if ('Gyroscope' in window) {
-                try {
-                    const gyroscope = new Gyroscope({ frequency: 20 });
-                    gyroscope.addEventListener('reading', () => {
-                        if (gyroscope.z !== null) {
-                            lastRawGyroValue = gyroscope.z;
-                            const correctedValue = gyroscope.z - gyroOffset;
-                            gyroReadings.push({ value: correctedValue, timestamp: Date.now() });
-                            
-                            const avgRadPerSec = calculateAverage(gyroReadings);
-                            const avgDegPerMin = avgRadPerSec * (180 / Math.PI) * 60;
-                            
-                            latestSensorTurnRate = avgDegPerMin;
-                            updateTurnRateDisplay();
-                        }
-                    });
-                    gyroscope.start();
-                } catch (error) { /* ... */ }
-            }
-
-            // --- Leitura do GPS (usado para Posição, Mapa e Velocidade) ---
             if ('geolocation' in navigator) {
                 navigator.geolocation.watchPosition(
                     (position) => {
-                        if (statusEl.textContent.startsWith('Erro')) statusEl.textContent = 'Sensores ativos.';
-                        dataContainer.style.display = 'block';
-                        mapContainer.style.display = 'block';
-                        
-                        const { latitude, longitude, speed, heading } = position.coords;
-                        speedEl.textContent = (speed === null) ? "0.00" : (speed * 1.94384).toFixed(2);
-                        
-                        // Apenas usa o heading do GPS se o sensor de orientação não funcionou
-                        if (!('AbsoluteOrientationSensor' in window)) {
-                           if (heading !== null && speed > 0.1) {
-                               directionEl.textContent = Math.round(heading);
-                           } else {
-                               directionEl.textContent = '---';
-                           }
-                        }
-                        
-                        if (!isMapInitialized) {
-                           // ... lógica de inicialização do mapa
-                        } else {
-                           // ... lógica de atualização do mapa
-                        }
-                    },
-                    (error) => { statusEl.textContent = `Erro de GPS: ${error.message}`; },
-                    { enableHighAccuracy: true, maximumAge: 0 }
-                );
-            }
-        }
-
-        // --- Colando as funções e listeners que não foram alterados ---
-        startButton.addEventListener('click', startSensors);
-        zeroButton.addEventListener('click', zeroGyro);
-        radiusSlider.addEventListener('input', (event) => { const newRadius = event.target.value; radiusValueEl.textContent = newRadius; if (accuracyCircle) { accuracyCircle.setRadius(parseInt(newRadius, 10)); } });
-        function calculateAverage(readings) { const now = Date.now(); const recentReadings = readings.filter(r => now - r.timestamp < AVERAGE_WINDOW); if (recentReadings.length === 0) return 0; const sum = recentReadings.reduce((acc, r) => acc + r.value, 0); return sum / recentReadings.length; }
-        function zeroGyro() { gyroOffset = lastRawGyroValue; manualTurnRateOffset = 0; updateTurnRateDisplay(); statusEl.textContent = 'Sensor de giro zerado!'; setTimeout(() => { if (statusEl.textContent === 'Sensor de giro zerado!') statusEl.textContent = 'Sensores ativos.'; }, 2000); }
-        function updateTurnRateDisplay() { const finalValue = latestSensorTurnRate + manualTurnRateOffset; turnRateEl.textContent = finalValue.toFixed(1); }
-        btnPlus.addEventListener('click', (e) => { e.stopPropagation(); manualTurnRateOffset += 0.1; updateTurnRateDisplay(); });
-        btnMinus.addEventListener('click', (e) => { e.stopPropagation(); manualTurnRateOffset -= 0.1; updateTurnRateDisplay(); });
-        // --- Código do Mapa ---
-        const initMapAndWatch = navigator.geolocation.watchPosition; // Para usar na função startSensors
-        navigator.geolocation.watchPosition = (success, error, options) => {
-            const watchId = initMapAndWatch.call(navigator.geolocation, (position) => {
-                if (!isMapInitialized) {
-                    map = L.map('map').setView([position.coords.latitude, position.coords.longitude], 16);
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(map);
-                    positionMarker = L.marker([position.coords.latitude, position.coords.longitude]).addTo(map).bindPopup('Sua Posição').openPopup();
-                    accuracyCircle = L.circle([position.coords.latitude, position.coords.longitude], { color: 'blue', fillColor: '#03a9f4', fillOpacity: 0.2, radius: parseInt(radiusSlider.value, 10) }).addTo(map);
-                    isMapInitialized = true;
-                } else {
-                    const latLng = [position.coords.latitude, position.coords.longitude];
-                    positionMarker.setLatLng(latLng);
-                    accuracyCircle.setLatLng(latLng);
-                    map.panTo(latLng);
-                }
-                success(position);
-            }, error, options);
-            return watchId;
-        };
-
-    </script>
-</body>
-</html>
+                        statusEl.textContent = `GPS ativo. Precisão: ${position.coords.accuracy.toFixed(0)}m`;
