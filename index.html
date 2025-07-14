@@ -11,48 +11,18 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap');
         
-        /* Layout de tela cheia */
         html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
         body { font-family: 'Roboto Mono', monospace; }
         
-        /* O mapa ocupará toda a tela, no fundo */
-        #map {
-            position: absolute;
-            top: 0; left: 0;
-            height: 100%;
-            width: 100%;
-            z-index: 1; /* Camada mais baixa */
-        }
+        #map { position: absolute; top: 0; left: 0; height: 100%; width: 100%; z-index: 1; }
 
-        /* Container para todos os elementos sobrepostos */
         .overlay-container {
-            position: absolute;
-            top: 0; left: 0;
-            height: 100%; width: 100%;
-            z-index: 2; /* Fica acima do mapa */
-            pointer-events: none; /* Permite cliques/toques no mapa */
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
+            position: absolute; top: 0; left: 0; height: 100%; width: 100%;
+            z-index: 2; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between;
         }
 
-        /* Painel superior com os indicadores */
-        #data-container {
-            display: flex;
-            justify-content: center;
-            flex-wrap: wrap;
-            gap: 5px;
-            padding: 5px;
-            background-color: rgba(26, 26, 26, 0.8); /* Fundo semi-transparente */
-            pointer-events: auto; /* Permite interação com os indicadores */
-        }
-        .data-box {
-            background-color: #333;
-            border-radius: 8px;
-            padding: 5px 10px;
-            text-align: center;
-            border: 1px solid #444;
-        }
+        #data-container { display: flex; justify-content: center; flex-wrap: wrap; gap: 5px; padding: 5px; background-color: rgba(26, 26, 26, 0.8); pointer-events: auto; }
+        .data-box { background-color: #333; border-radius: 8px; padding: 5px 10px; text-align: center; border: 1px solid #444; }
         .data-box .label { font-size: 0.7em; color: #aaa; text-transform: uppercase; }
         .data-box .value { font-size: 1.6em; font-weight: 700; color: #fff; }
         .unit { font-size: 0.6em; color: #ccc; }
@@ -60,26 +30,16 @@
         .adjustable-value-container { display: flex; align-items: center; justify-content: center; gap: 10px; }
         .adjust-btn { background-color: #555; color: white; border: none; width: 30px; height: 30px; font-size: 20px; line-height: 30px; border-radius: 50%; cursor: pointer; }
 
-        /* Painel inferior com os botões */
-        .footer-controls {
-            padding: 15px;
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            pointer-events: auto; /* Permite interação com os botões */
-        }
-        .button {
-            color: white;
-            padding: 12px 20px;
-            border: none;
-            border-radius: 5px;
-            font-size: 1em;
-            cursor: pointer;
-            background-color: #03a9f4;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.4);
-        }
+        .footer-controls { padding: 10px; display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: auto; background-color: rgba(26, 26, 26, 0.8); }
+        .button-row { display: flex; gap: 10px; justify-content: center; width: 100%; }
+        .button { color: white; padding: 12px 20px; border: none; border-radius: 5px; font-size: 1em; cursor: pointer; background-color: #03a9f4; box-shadow: 0 2px 5px rgba(0,0,0,0.4); flex-grow: 1; }
         #zeroButton { background-color: #f44336; }
-        #status { text-align: center; color: #ffc107; background-color: rgba(0,0,0,0.5); padding: 2px; font-size: 0.8em;}
+        
+        /* NOVO: Estilos para o controle do raio */
+        #circle-control { color: #eee; font-size: 0.8em; width: 100%; max-width: 350px; }
+        #radius-slider { width: 100%; }
+
+        #status { text-align: center; color: #ffc107; font-size: 0.8em; min-height: 18px; }
     </style>
 </head>
 <body>
@@ -88,81 +48,75 @@
 
     <div class="overlay-container">
         <div id="data-container" style="display:none;">
-            <div class="data-box">
-                <div class="label">Velocidade</div>
-                <div class="value"><span id="speed">0.00</span><span class="unit"> knots</span></div>
             </div>
-            <div class="data-box">
-                <div class="label">Direção</div>
-                <div class="value"><span id="direction">---</span><span class="unit">°</span></div>
-            </div>
-            <div class="data-box">
-                <div class="label">Taxa Giro</div>
-                <div class="adjustable-value-container">
-                    <button class="adjust-btn" id="btn-minus">-</button>
-                    <span class="value" id="turnRate">0.0</span>
-                    <button class="adjust-btn" id="btn-plus">+</button>
-                </div>
-                <div class="unit" style="margin-top: 2px;">°/min</div>
-            </div>
-        </div>
 
         <div style="flex-grow: 1;"></div> 
 
         <div class="footer-controls">
-            <button id="startButton" class="button">Iniciar Navegação</button>
-            <button id="zeroButton" class="button" style="display:none;">Zerar Giro</button>
             <div id="status">Aguardando início...</div>
+            <div id="circle-control" style="display:none;">
+                <label for="radius-slider">Raio do Círculo: <span id="radius-value">50</span>m</label>
+                <input type="range" id="radius-slider" min="10" max="500" value="50" step="10">
+            </div>
+            <div class="button-row">
+                <button id="startButton" class="button">Iniciar Navegação</button>
+                <button id="zeroButton" class="button" style="display:none;">Zerar Giro</button>
+            </div>
         </div>
     </div>
 
-
     <script>
         // --- Elementos da UI ---
-        const statusEl = document.getElementById('status');
+        const dataContainer = document.getElementById('data-container');
         const startButton = document.getElementById('startButton');
         const zeroButton = document.getElementById('zeroButton');
-        const dataContainer = document.getElementById('data-container');
-        const speedEl = document.getElementById('speed');
-        const directionEl = document.getElementById('direction');
-        const turnRateEl = document.getElementById('turnRate');
-        const btnPlus = document.getElementById('btn-plus');
-        const btnMinus = document.getElementById('btn-minus');
+        const statusEl = document.getElementById('status');
+        // NOVO: Elementos do controle de raio
+        const circleControl = document.getElementById('circle-control');
+        const radiusSlider = document.getElementById('radius-slider');
+        const radiusValueEl = document.getElementById('radius-value');
         
         // --- Variáveis de Estado ---
-        const AVERAGE_WINDOW = 5000;
         let gyroReadings = [], gyroOffset = 0, lastRawGyroValue = 0;
         let manualTurnRateOffset = 0.0, latestSensorTurnRate = 0.0;
-        let map, positionMarker, accuracyCircle;
+        let map, positionMarker, adjustableCircle; // Renomeado de accuracyCircle
         let isMapInitialized = false;
 
         // --- Funções Auxiliares ---
         function calculateAverage(readings) { const now = Date.now(); const recentReadings = readings.filter(r => now - r.timestamp < AVERAGE_WINDOW); if (recentReadings.length === 0) return 0; const sum = recentReadings.reduce((acc, r) => acc + r.value, 0); return sum / recentReadings.length; }
         function zeroGyro() { gyroOffset = lastRawGyroValue; manualTurnRateOffset = 0; updateTurnRateDisplay(); statusEl.textContent = 'Giro Zerado!'; setTimeout(() => { if (statusEl.textContent === 'Giro Zerado!') statusEl.textContent = 'GPS Ativo'; }, 2000); }
-        function updateTurnRateDisplay() { const finalValue = latestSensorTurnRate + manualTurnRateOffset; turnRateEl.textContent = finalValue.toFixed(1); }
+        function updateTurnRateDisplay() { const finalValue = latestSensorTurnRate + manualTurnRateOffset; document.getElementById('turnRate').textContent = finalValue.toFixed(1); }
 
         // --- Função Principal de Inicialização ---
         function startSensors() {
             startButton.style.display = 'none';
             zeroButton.style.display = 'inline-block';
             dataContainer.style.display = 'flex';
+            circleControl.style.display = 'block'; // Mostra o controle do raio
             statusEl.textContent = 'Solicitando permissões...';
+            
+            // --- Populando os indicadores que foram removidos do HTML inicial ---
+            dataContainer.innerHTML = `
+            <div class="data-box"> <div class="label">Velocidade</div> <div class="value"><span id="speed">0.00</span><span class="unit"> knots</span></div> </div>
+            <div class="data-box"> <div class="label">Direção</div> <div class="value"><span id="direction">---</span><span class="unit">°</span></div> </div>
+            <div class="data-box"> <div class="label">Taxa Giro</div> <div class="adjustable-value-container">
+                <button class="adjust-btn" id="btn-minus">-</button> <span class="value" id="turnRate">0.0</span> <button class="adjust-btn" id="btn-plus">+</button>
+            </div> <div class="unit" style="margin-top: 2px;">°/min</div> </div>`;
+            // Anexando eventos aos botões recém-criados
+            document.getElementById('btn-plus').addEventListener('click', (e) => { e.stopPropagation(); manualTurnRateOffset += 0.1; updateTurnRateDisplay(); });
+            document.getElementById('btn-minus').addEventListener('click', (e) => { e.stopPropagation(); manualTurnRateOffset -= 0.1; updateTurnRateDisplay(); });
 
             // --- Sensor de Orientação (Bússola) ---
-            try {
-                if ('AbsoluteOrientationSensor' in window) {
-                    const orientationSensor = new AbsoluteOrientationSensor({ frequency: 20 });
-                    orientationSensor.addEventListener('reading', () => {
-                        const quaternion = orientationSensor.quaternion;
-                        if (!quaternion) return;
-                        let yawRad = Math.atan2(2 * (quaternion[3] * quaternion[2] + quaternion[0] * quaternion[1]), 1 - 2 * (quaternion[1] * quaternion[1] + quaternion[2] * quaternion[2]));
-                        let yawDeg = yawRad * (180 / Math.PI);
-                        if (yawDeg < 0) yawDeg += 360;
-                        directionEl.textContent = Math.round(yawDeg);
-                    });
-                    orientationSensor.start();
-                }
-            } catch (error) { statusEl.textContent = 'Erro no sensor de orientação.'; }
+            if ('AbsoluteOrientationSensor' in window) {
+                const orientationSensor = new AbsoluteOrientationSensor({ frequency: 20 });
+                orientationSensor.addEventListener('reading', () => {
+                    const quaternion = orientationSensor.quaternion; if (!quaternion) return;
+                    let yawRad = Math.atan2(2 * (quaternion[3] * quaternion[2] + quaternion[0] * quaternion[1]), 1 - 2 * (quaternion[1] * quaternion[1] + quaternion[2] * quaternion[2]));
+                    let yawDeg = yawRad * (180 / Math.PI); if (yawDeg < 0) yawDeg += 360;
+                    document.getElementById('direction').textContent = Math.round(yawDeg);
+                });
+                orientationSensor.start();
+            }
 
             // --- Sensor de Giroscópio ---
             if ('Gyroscope' in window) {
@@ -184,9 +138,9 @@
             navigator.geolocation.watchPosition(
                 (position) => {
                     if (statusEl.textContent !== 'Giro Zerado!') statusEl.textContent = 'GPS Ativo';
-                    const { latitude, longitude, accuracy, speed } = position.coords;
+                    const { latitude, longitude, speed } = position.coords;
                     const latLng = [latitude, longitude];
-                    speedEl.textContent = (speed === null) ? "0.00" : (speed * 1.94384).toFixed(2);
+                    document.getElementById('speed').textContent = (speed === null) ? "0.00" : (speed * 1.94384).toFixed(2);
 
                     if (!isMapInitialized) {
                         const imageUrl = '1841.png'; 
@@ -194,11 +148,16 @@
                         map = L.map('map', { zoomControl: false }).fitBounds(imageBounds);
                         L.imageOverlay(imageUrl, imageBounds).addTo(map);
                         positionMarker = L.marker(latLng, { icon: L.icon({ iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png', iconSize: [25, 41], iconAnchor: [12, 41] }) }).addTo(map);
-                        accuracyCircle = L.circle(latLng, { radius: accuracy, weight: 1, color: '#03a9f4', fillOpacity: 0.1 }).addTo(map);
+                        
+                        // O círculo agora usa o valor do slider
+                        adjustableCircle = L.circle(latLng, { 
+                            radius: parseInt(radiusSlider.value, 10), 
+                            weight: 1, color: '#03a9f4', fillOpacity: 0.1 
+                        }).addTo(map);
                         isMapInitialized = true;
                     } else {
                         positionMarker.setLatLng(latLng);
-                        accuracyCircle.setLatLng(latLng).setRadius(accuracy);
+                        adjustableCircle.setLatLng(latLng); // Apenas atualiza a posição, o raio é controlado pelo slider
                     }
                 },
                 (error) => { statusEl.textContent = `Erro de GPS: ${error.message}`; },
@@ -209,8 +168,14 @@
         // --- Listeners de Eventos ---
         startButton.addEventListener('click', startSensors);
         zeroButton.addEventListener('click', zeroGyro);
-        btnPlus.addEventListener('click', (e) => { e.stopPropagation(); manualTurnRateOffset += 0.1; updateTurnRateDisplay(); });
-        btnMinus.addEventListener('click', (e) => { e.stopPropagation(); manualTurnRateOffset -= 0.1; updateTurnRateDisplay(); });
+        // NOVO: Listener para o controle do raio
+        radiusSlider.addEventListener('input', (event) => {
+            const newRadius = event.target.value;
+            radiusValueEl.textContent = newRadius;
+            if (adjustableCircle) {
+                adjustableCircle.setRadius(parseInt(newRadius, 10));
+            }
+        });
     </script>
 </body>
 </html>
