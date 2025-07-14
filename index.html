@@ -25,7 +25,7 @@
             max-width: 400px;
         }
         h1 {
-            color: #03a9f4; /* Cor alterada para azul claro */
+            color: #03a9f4;
             border-bottom: 2px solid #03a9f4;
             padding-bottom: 10px;
             margin-bottom: 20px;
@@ -36,6 +36,7 @@
             margin: 15px 0;
             padding: 20px;
             border: 1px solid #444;
+            position: relative;
         }
         .data-box .label {
             font-size: 0.9em;
@@ -58,16 +59,28 @@
             font-size: 0.9em;
             min-height: 20px;
         }
-        #startButton {
-            background-color: #03a9f4;
+        .button-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .button {
             color: white;
-            padding: 15px 30px;
+            padding: 15px 20px;
             border: none;
             border-radius: 5px;
-            font-size: 1.2em;
+            font-size: 1.1em;
             cursor: pointer;
-            margin-top: 20px;
             font-family: 'Roboto Mono', monospace;
+        }
+        #startButton {
+            background-color: #03a9f4;
+            flex-grow: 1; /* Ocupa mais espaço */
+        }
+        #zeroButton {
+            background-color: #f44336; /* Cor vermelha para zerar */
+            display: none; /* Começa escondido */
         }
     </style>
 </head>
@@ -92,25 +105,33 @@
                 <div class="value"><span id="turnRate">0.0</span> <span class="unit">°/min</span></div>
             </div>
         </div>
-
-        <button id="startButton">Iniciar Sensores</button>
+        
+        <div class="button-group">
+            <button id="startButton" class="button">Iniciar Sensores</button>
+            <button id="zeroButton" class="button">Zerar Giro</button>
+        </div>
         <div id="status">Aguardando início...</div>
     </div>
 
     <script>
         const statusEl = document.getElementById('status');
         const startButton = document.getElementById('startButton');
+        const zeroButton = document.getElementById('zeroButton');
         const dataContainer = document.getElementById('data-container');
 
         const speedEl = document.getElementById('speed');
         const directionEl = document.getElementById('direction');
         const turnRateEl = document.getElementById('turnRate');
 
-        const AVERAGE_WINDOW = 5000; // 5 segundos em milissegundos
+        const AVERAGE_WINDOW = 5000; // 5 segundos
 
         let speedReadings = [];
         let headingReadings = [];
         let gyroReadings = [];
+        
+        // --- NOVO: Variável para o desvio do giroscópio ---
+        let gyroOffset = 0;
+        let lastRawGyroValue = 0;
 
         function calculateAverage(readings) {
             const now = Date.now();
@@ -119,9 +140,23 @@
             const sum = recentReadings.reduce((acc, r) => acc + r.value, 0);
             return sum / recentReadings.length;
         }
+        
+        // --- NOVO: Função para zerar o sensor ---
+        function zeroGyro() {
+            // Define o desvio como o último valor bruto lido do sensor
+            gyroOffset = lastRawGyroValue;
+            statusEl.textContent = 'Sensor de giro zerado!';
+            // Faz a mensagem desaparecer após 2 segundos
+            setTimeout(() => {
+                if (statusEl.textContent === 'Sensor de giro zerado!') {
+                    statusEl.textContent = 'Sensores ativos.';
+                }
+            }, 2000);
+        }
 
         function startSensors() {
             startButton.style.display = 'none';
+            zeroButton.style.display = 'block'; // Mostra o botão de zerar
             statusEl.textContent = 'Solicitando permissões...';
 
             // --- Permissão e Leitura do Giroscópio ---
@@ -131,16 +166,17 @@
 
                     gyroscope.addEventListener('reading', () => {
                         if (gyroscope.z !== null) {
+                            lastRawGyroValue = gyroscope.z; // Armazena o valor bruto
+                            const correctedValue = gyroscope.z - gyroOffset; // Aplica a correção
+                            
                             const now = Date.now();
-                            gyroReadings.push({ value: gyroscope.z, timestamp: now });
+                            gyroReadings.push({ value: correctedValue, timestamp: now });
                             gyroReadings = gyroReadings.filter(r => now - r.timestamp < AVERAGE_WINDOW);
 
                             const avgRadPerSec = calculateAverage(gyroReadings);
                             const avgDegPerSec = avgRadPerSec * (180 / Math.PI);
-                            
-                            // --- ALTERAÇÃO PRINCIPAL AQUI ---
-                            const avgDegPerMin = avgDegPerSec * 60; // Converte de °/s para °/min
-                            turnRateEl.textContent = avgDegPerMin.toFixed(0); // Exibe como número inteiro
+                            const avgDegPerMin = avgDegPerSec * 60;
+                            turnRateEl.textContent = avgDegPerMin.toFixed(0);
                         }
                     });
 
@@ -154,34 +190,31 @@
                 }
             } else {
                 turnRateEl.textContent = 'N/A';
-                statusEl.textContent = 'Giroscópio não suportado por este navegador.';
             }
 
             // --- Permissão e Leitura do GPS ---
             if ('geolocation' in navigator) {
                 navigator.geolocation.watchPosition(
                     (position) => {
-                        statusEl.textContent = 'Sensores ativos.';
+                        if (statusEl.textContent !== 'Sensor de giro zerado!') {
+                            statusEl.textContent = 'Sensores ativos.';
+                        }
                         dataContainer.style.display = 'block';
                         
                         const { speed, heading } = position.coords;
                         const now = Date.now();
 
-                        // Velocidade
                         if (speed !== null) {
                             const speedInKnots = speed * 1.94384;
                             speedReadings.push({ value: speedInKnots, timestamp: now });
-                            speedReadings = speedReadings.filter(r => now - r.timestamp < AVERAGE_WINDOW);
                             const avgSpeed = calculateAverage(speedReadings);
                             speedEl.textContent = avgSpeed.toFixed(2);
                         } else {
                              speedEl.textContent = "0.00";
                         }
 
-                        // Direção
                         if (heading !== null && speed > 0.1) {
                             headingReadings.push({ value: heading, timestamp: now });
-                            headingReadings = headingReadings.filter(r => now - r.timestamp < AVERAGE_WINDOW);
                             const avgHeading = calculateAverage(headingReadings);
                             directionEl.textContent = Math.round(avgHeading);
                         } else {
@@ -189,35 +222,18 @@
                         }
                     },
                     (error) => {
-                        let errorMsg = '';
-                        switch (error.code) {
-                            case error.PERMISSION_DENIED:
-                                errorMsg = "Permissão para acessar o GPS foi negada.";
-                                break;
-                            case error.POSITION_UNAVAILABLE:
-                                errorMsg = "Informação de localização indisponível.";
-                                break;
-                            case error.TIMEOUT:
-                                errorMsg = "A requisição de localização expirou.";
-                                break;
-                            default:
-                                errorMsg = "Ocorreu um erro desconhecido no GPS.";
-                                break;
-                        }
-                        statusEl.textContent = errorMsg;
+                        statusEl.textContent = `Erro de GPS: ${error.message}`;
                     },
-                    {
-                        enableHighAccuracy: true,
-                        maximumAge: 0,
-                        timeout: 10000
-                    }
+                    { enableHighAccuracy: true, maximumAge: 0 }
                 );
             } else {
-                statusEl.textContent = 'Geolocalização não é suportada por este navegador.';
+                statusEl.textContent = 'Geolocalização não é suportada.';
             }
         }
 
         startButton.addEventListener('click', startSensors);
+        // --- NOVO: Adiciona o evento ao botão de zerar ---
+        zeroButton.addEventListener('click', zeroGyro);
 
     </script>
 </body>
