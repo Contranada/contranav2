@@ -2,114 +2,215 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Painel de Navegação com Carta 1841</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <title>Painel de Navegação Final</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap');
+        
+        /* Layout de tela cheia */
         html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
-        body { font-family: 'Roboto Mono', monospace; background-color: #1a1a1a; color: #f0f0f0; display: flex; flex-direction: column; }
-        .container { width: 100%; margin: 0 auto; display: flex; flex-direction: column; flex-grow: 1; }
-        .header { text-align: center; padding: 10px; }
-        h1 { color: #03a9f4; margin: 0; font-size: 1.5em; }
-        #map-container { flex-grow: 1; display: block; background-color: #333; } /* Começa visível para evitar problemas */
-        #map { height: 100%; width: 100%; }
-        .footer { padding: 15px; text-align: center; background-color: #222; }
-        .button { color: white; padding: 15px 25px; border: none; border-radius: 5px; font-size: 1.1em; cursor: pointer; font-family: 'Roboto Mono', monospace; background-color: #03a9f4; }
-        #status { margin-top: 10px; color: #ffc107; font-size: 0.9em; min-height: 20px; }
+        body { font-family: 'Roboto Mono', monospace; }
+        
+        /* O mapa ocupará toda a tela, no fundo */
+        #map {
+            position: absolute;
+            top: 0; left: 0;
+            height: 100%;
+            width: 100%;
+            z-index: 1; /* Camada mais baixa */
+        }
+
+        /* Container para todos os elementos sobrepostos */
+        .overlay-container {
+            position: absolute;
+            top: 0; left: 0;
+            height: 100%; width: 100%;
+            z-index: 2; /* Fica acima do mapa */
+            pointer-events: none; /* Permite cliques/toques no mapa */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        /* Painel superior com os indicadores */
+        #data-container {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 5px;
+            padding: 5px;
+            background-color: rgba(26, 26, 26, 0.8); /* Fundo semi-transparente */
+            pointer-events: auto; /* Permite interação com os indicadores */
+        }
+        .data-box {
+            background-color: #333;
+            border-radius: 8px;
+            padding: 5px 10px;
+            text-align: center;
+            border: 1px solid #444;
+        }
+        .data-box .label { font-size: 0.7em; color: #aaa; text-transform: uppercase; }
+        .data-box .value { font-size: 1.6em; font-weight: 700; color: #fff; }
+        .unit { font-size: 0.6em; color: #ccc; }
+        
+        .adjustable-value-container { display: flex; align-items: center; justify-content: center; gap: 10px; }
+        .adjust-btn { background-color: #555; color: white; border: none; width: 30px; height: 30px; font-size: 20px; line-height: 30px; border-radius: 50%; cursor: pointer; }
+
+        /* Painel inferior com os botões */
+        .footer-controls {
+            padding: 15px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            pointer-events: auto; /* Permite interação com os botões */
+        }
+        .button {
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1em;
+            cursor: pointer;
+            background-color: #03a9f4;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+        }
+        #zeroButton { background-color: #f44336; }
+        #status { text-align: center; color: #ffc107; background-color: rgba(0,0,0,0.5); padding: 2px; font-size: 0.8em;}
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <div class="header">
-            <h1>Navegação - Carta 1841</h1>
-            <div id="status">Aguardando início...</div>
+    <div id="map"></div>
+
+    <div class="overlay-container">
+        <div id="data-container" style="display:none;">
+            <div class="data-box">
+                <div class="label">Velocidade</div>
+                <div class="value"><span id="speed">0.00</span><span class="unit"> knots</span></div>
+            </div>
+            <div class="data-box">
+                <div class="label">Direção</div>
+                <div class="value"><span id="direction">---</span><span class="unit">°</span></div>
+            </div>
+            <div class="data-box">
+                <div class="label">Taxa Giro</div>
+                <div class="adjustable-value-container">
+                    <button class="adjust-btn" id="btn-minus">-</button>
+                    <span class="value" id="turnRate">0.0</span>
+                    <button class="adjust-btn" id="btn-plus">+</button>
+                </div>
+                <div class="unit" style="margin-top: 2px;">°/min</div>
+            </div>
         </div>
 
-        <div id="map-container">
-            <div id="map"></div>
-        </div>
-        
-        <div class="footer">
+        <div style="flex-grow: 1;"></div> 
+
+        <div class="footer-controls">
             <button id="startButton" class="button">Iniciar Navegação</button>
+            <button id="zeroButton" class="button" style="display:none;">Zerar Giro</button>
+            <div id="status">Aguardando início...</div>
         </div>
     </div>
 
-    <script>
-        // --- ALERTA DE DIAGNÓSTICO 1 ---
-        alert("Diagnóstico 1: Script está sendo executado.");
 
+    <script>
         // --- Elementos da UI ---
         const statusEl = document.getElementById('status');
         const startButton = document.getElementById('startButton');
-        const mapContainer = document.getElementById('map-container');
+        const zeroButton = document.getElementById('zeroButton');
+        const dataContainer = document.getElementById('data-container');
+        const speedEl = document.getElementById('speed');
+        const directionEl = document.getElementById('direction');
+        const turnRateEl = document.getElementById('turnRate');
+        const btnPlus = document.getElementById('btn-plus');
+        const btnMinus = document.getElementById('btn-minus');
         
         // --- Variáveis de Estado ---
+        const AVERAGE_WINDOW = 5000;
+        let gyroReadings = [], gyroOffset = 0, lastRawGyroValue = 0;
+        let manualTurnRateOffset = 0.0, latestSensorTurnRate = 0.0;
         let map, positionMarker, accuracyCircle;
         let isMapInitialized = false;
 
+        // --- Funções Auxiliares ---
+        function calculateAverage(readings) { const now = Date.now(); const recentReadings = readings.filter(r => now - r.timestamp < AVERAGE_WINDOW); if (recentReadings.length === 0) return 0; const sum = recentReadings.reduce((acc, r) => acc + r.value, 0); return sum / recentReadings.length; }
+        function zeroGyro() { gyroOffset = lastRawGyroValue; manualTurnRateOffset = 0; updateTurnRateDisplay(); statusEl.textContent = 'Giro Zerado!'; setTimeout(() => { if (statusEl.textContent === 'Giro Zerado!') statusEl.textContent = 'GPS Ativo'; }, 2000); }
+        function updateTurnRateDisplay() { const finalValue = latestSensorTurnRate + manualTurnRateOffset; turnRateEl.textContent = finalValue.toFixed(1); }
+
+        // --- Função Principal de Inicialização ---
         function startSensors() {
-            // --- ALERTA DE DIAGNÓSTICO 3 ---
-            alert("Diagnóstico 3: Função startSensors() foi chamada com sucesso!");
-
             startButton.style.display = 'none';
-            statusEl.textContent = 'Solicitando permissão de GPS...';
+            zeroButton.style.display = 'inline-block';
+            dataContainer.style.display = 'flex';
+            statusEl.textContent = 'Solicitando permissões...';
 
-            if ('geolocation' in navigator) {
-                navigator.geolocation.watchPosition(
-                    (position) => {
-                        statusEl.textContent = `GPS ativo. Precisão: ${position.coords.accuracy.toFixed(0)}m`;
-                        const { latitude, longitude, accuracy } = position.coords;
-                        const latLng = [latitude, longitude];
+            // --- Sensor de Orientação (Bússola) ---
+            try {
+                if ('AbsoluteOrientationSensor' in window) {
+                    const orientationSensor = new AbsoluteOrientationSensor({ frequency: 20 });
+                    orientationSensor.addEventListener('reading', () => {
+                        const quaternion = orientationSensor.quaternion;
+                        if (!quaternion) return;
+                        let yawRad = Math.atan2(2 * (quaternion[3] * quaternion[2] + quaternion[0] * quaternion[1]), 1 - 2 * (quaternion[1] * quaternion[1] + quaternion[2] * quaternion[2]));
+                        let yawDeg = yawRad * (180 / Math.PI);
+                        if (yawDeg < 0) yawDeg += 360;
+                        directionEl.textContent = Math.round(yawDeg);
+                    });
+                    orientationSensor.start();
+                }
+            } catch (error) { statusEl.textContent = 'Erro no sensor de orientação.'; }
 
-                        if (!isMapInitialized) {
-                            const imageUrl = '1841.png'; 
-                            const imageBounds = [
-                                [-26.8667, -48.7000], // Canto Superior-Esquerdo
-                                [-26.9500, -48.5500]  // Canto Inferior-Direito
-                            ];
-
-                            map = L.map('map').fitBounds(imageBounds);
-                            L.imageOverlay(imageUrl, imageBounds).addTo(map);
-
-                            positionMarker = L.marker(latLng, {
-                                icon: L.icon({
-                                    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-                                    iconSize: [25, 41],
-                                    iconAnchor: [12, 41]
-                                })
-                            }).addTo(map);
-
-                            accuracyCircle = L.circle(latLng, { 
-                                radius: accuracy, weight: 1, color: '#03a9f4', fillOpacity: 0.1
-                            }).addTo(map);
-                            
-                            isMapInitialized = true;
-                        } else {
-                            positionMarker.setLatLng(latLng);
-                            accuracyCircle.setLatLng(latLng).setRadius(accuracy);
-                        }
-                    },
-                    (error) => { statusEl.textContent = `Erro de GPS: ${error.message}`; },
-                    { enableHighAccuracy: true, maximumAge: 0 }
-                );
-            } else {
-                statusEl.textContent = 'Geolocalização não é suportada.';
-                alert("Seu navegador não tem suporte para Geolocalização.");
+            // --- Sensor de Giroscópio ---
+            if ('Gyroscope' in window) {
+                const gyroscope = new Gyroscope({ frequency: 20 });
+                gyroscope.addEventListener('reading', () => {
+                    if (gyroscope.z !== null) {
+                        lastRawGyroValue = gyroscope.z;
+                        const correctedValue = gyroscope.z - gyroOffset;
+                        gyroReadings.push({ value: correctedValue, timestamp: Date.now() });
+                        const avgRadPerSec = calculateAverage(gyroReadings);
+                        latestSensorTurnRate = avgRadPerSec * (180 / Math.PI) * 60;
+                        updateTurnRateDisplay();
+                    }
+                });
+                gyroscope.start();
             }
+
+            // --- GPS (Posição, Velocidade e Mapa) ---
+            navigator.geolocation.watchPosition(
+                (position) => {
+                    if (statusEl.textContent !== 'Giro Zerado!') statusEl.textContent = 'GPS Ativo';
+                    const { latitude, longitude, accuracy, speed } = position.coords;
+                    const latLng = [latitude, longitude];
+                    speedEl.textContent = (speed === null) ? "0.00" : (speed * 1.94384).toFixed(2);
+
+                    if (!isMapInitialized) {
+                        const imageUrl = '1841.png'; 
+                        const imageBounds = [[-26.8667, -48.7000], [-26.9500, -48.5500]];
+                        map = L.map('map', { zoomControl: false }).fitBounds(imageBounds);
+                        L.imageOverlay(imageUrl, imageBounds).addTo(map);
+                        positionMarker = L.marker(latLng, { icon: L.icon({ iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png', iconSize: [25, 41], iconAnchor: [12, 41] }) }).addTo(map);
+                        accuracyCircle = L.circle(latLng, { radius: accuracy, weight: 1, color: '#03a9f4', fillOpacity: 0.1 }).addTo(map);
+                        isMapInitialized = true;
+                    } else {
+                        positionMarker.setLatLng(latLng);
+                        accuracyCircle.setLatLng(latLng).setRadius(accuracy);
+                    }
+                },
+                (error) => { statusEl.textContent = `Erro de GPS: ${error.message}`; },
+                { enableHighAccuracy: true, maximumAge: 0 }
+            );
         }
-        
-        if (startButton) {
-            // --- ALERTA DE DIAGNÓSTICO 2 ---
-            alert("Diagnóstico 2: Botão 'Iniciar' encontrado. Anexando evento de clique.");
-            startButton.addEventListener('click', startSensors);
-        } else {
-            alert("ERRO CRÍTICO: Não foi possível encontrar o botão 'startButton' na página.");
-        }
+
+        // --- Listeners de Eventos ---
+        startButton.addEventListener('click', startSensors);
+        zeroButton.addEventListener('click', zeroGyro);
+        btnPlus.addEventListener('click', (e) => { e.stopPropagation(); manualTurnRateOffset += 0.1; updateTurnRateDisplay(); });
+        btnMinus.addEventListener('click', (e) => { e.stopPropagation(); manualTurnRateOffset -= 0.1; updateTurnRateDisplay(); });
     </script>
 </body>
 </html>
