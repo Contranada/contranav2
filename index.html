@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de GPS Simples</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; margin-top: 50px; background-color: #f0f0f0; }
+        h1 { color: #333; }
+        #status { font-size: 1.2em; font-weight: bold; margin: 20px; padding: 15px; border-radius: 5px; }
+        #coords { color: #555; }
+        button { padding: 10px 20px; font-size: 1em; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Teste de Permissão de GPS</h1>
+    <button id="startButton">Pedir Permissão</button>
+    <p id="status">Aguardando...</p>
+    <p id="coords">Coordenadas aparecerão aqui.</p>
+
+    <script>
+        const startButton = document.getElementById('startButton');
+        const statusEl = document.getElementById('status');
+        const coordsEl = document.getElementById('coords');
+
+        startButton.addEventListener('click', () => {
+            statusEl.textContent = 'Pedindo permissão...';
+            if (!navigator.geolocation) {
+                statusEl.textContent = 'ERRO: Geolocalização não é suportada por este navegador.';
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    statusEl.style.backgroundColor = '#d4edda';
+                    statusEl.style.color = '#155724';
+                    statusEl.textContent = 'SUCESSO! Permissão concedida.';
+                    const { latitude, longitude } = position.coords;
+                    coordsEl.textContent = `Lat: ${latitude.toFixed(4)}, Lon: ${longitude.toFixed(4)}`;
+                },
+                (error) => {
+                    statusEl.style.backgroundColor = '#f8d7da';
+                    statusEl.style.color = '#721c24';
+                    let errorMsg = `ERRO: ${error.message} (código: ${error.code})`;
+                    statusEl.textContent = errorMsg;
+                },
+                { enableHighAccuracy: true }
+            );
+        });
+    </script>
+</body>
+</html>
