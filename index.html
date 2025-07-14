@@ -41,11 +41,11 @@
                 <div class="value"><span id="speed">0.00</span> <span class="unit">knots</span></div>
             </div>
             <div class="data-box">
-                <div class="label">Direção Verdadeira</div>
+                <div class="label">Direção (Bússola)</div>
                 <div class="value"><span id="direction">---</span> <span class="unit">°</span></div>
             </div>
             <div class="data-box">
-                <div class="label">Taxa de Giro (Yaw)</div>
+                <div class="label">Taxa de Giro (Giroscópio)</div>
                 <div class="adjustable-value-container">
                     <button class="adjust-btn" id="btn-minus">-</button>
                     <span class="value" id="turnRate">0.0</span>
@@ -56,12 +56,7 @@
         </div>
 
         <div id="map-container">
-            <div id="map"></div>
-            <div id="map-controls">
-                <label for="radius-slider">Raio: <span id="radius-value">50</span>m</label><br>
-                <input type="range" id="radius-slider" min="10" max="500" value="50">
             </div>
-        </div>
         
         <div class="button-group">
             <button id="startButton" class="button">Iniciar Sensores</button>
@@ -78,20 +73,11 @@
         const btnPlus = document.getElementById('btn-plus');
         const btnMinus = document.getElementById('btn-minus');
         
-        // --- Variáveis de Estado e Constantes ---
-        const AVERAGE_WINDOW = 5000; // 5 segundos
-        // NOVO: Limiar para o filtro de dados do giroscópio
-        const GYRO_THRESHOLD_DEG_MIN = 100; // Limite em graus por minuto
-        // Converte o limiar para radianos por segundo para comparar com o dado bruto do sensor
-        const GYRO_THRESHOLD_RAD_SEC = (GYRO_THRESHOLD_DEG_MIN / 60) * (Math.PI / 180);
-
-        let gyroReadings = [];
-        let gyroOffset = 0;
-        let lastRawGyroValue = 0;
-        let manualTurnRateOffset = 0.0;
-        let latestSensorTurnRate = 0.0;
+        // --- Constantes e Variáveis de Estado ---
+        const AVERAGE_WINDOW = 5000;
+        let gyroReadings = [], gyroOffset = 0, lastRawGyroValue = 0;
+        let manualTurnRateOffset = 0.0, latestSensorTurnRate = 0.0;
         
-        // --- Demais variáveis e elementos (sem alteração) ---
         const statusEl = document.getElementById('status'), startButton = document.getElementById('startButton'), zeroButton = document.getElementById('zeroButton'), dataContainer = document.getElementById('data-container'), mapContainer = document.getElementById('map-container'), radiusSlider = document.getElementById('radius-slider'), radiusValueEl = document.getElementById('radius-value');
         let map, positionMarker, accuracyCircle, isMapInitialized = false;
 
@@ -99,18 +85,43 @@
         function calculateAverage(readings) { /* ... sem alteração ... */ }
         function zeroGyro() { /* ... sem alteração ... */ }
         function updateTurnRateDisplay() { /* ... sem alteração ... */ }
-        
-        // --- Event Listeners dos botões de ajuste (sem alteração) ---
-        btnPlus.addEventListener('click', (e) => { /* ... sem alteração ... */ });
-        btnMinus.addEventListener('click', (e) => { /* ... sem alteração ... */ });
-        radiusSlider.addEventListener('input', (event) => { /* ... sem alteração ... */ });
 
         function startSensors() {
             startButton.style.display = 'none';
             zeroButton.style.display = 'block';
             statusEl.textContent = 'Solicitando permissões...';
 
-            // --- Leitura do Giroscópio (COM O NOVO FILTRO) ---
+            // --- NOVO: Sensor de Orientação Absoluta (Bússola Estabilizada) ---
+            try {
+                if ('AbsoluteOrientationSensor' in window) {
+                    const orientationSensor = new AbsoluteOrientationSensor({ frequency: 20 });
+                    orientationSensor.addEventListener('reading', () => {
+                        // O sensor nos dá um "quaternion", que é uma forma matemática de representar a rotação 3D.
+                        const quaternion = orientationSensor.quaternion;
+                        if (!quaternion) return;
+
+                        // Convertemos o quaternion para um ângulo de direção (Azimute/Yaw)
+                        let yawRad = Math.atan2(2 * (quaternion[3] * quaternion[2] + quaternion[0] * quaternion[1]), 1 - 2 * (quaternion[1] * quaternion[1] + quaternion[2] * quaternion[2]));
+                        let yawDeg = yawRad * (180 / Math.PI);
+
+                        // O resultado do Azimute pode ser de -180 a 180. Ajustamos para 0 a 360°.
+                        if (yawDeg < 0) {
+                            yawDeg += 360;
+                        }
+
+                        directionEl.textContent = Math.round(yawDeg);
+                    });
+                    orientationSensor.start();
+                } else {
+                    // Fallback para o GPS se o sensor avançado não estiver disponível
+                    directionEl.parentElement.querySelector('.label').textContent = 'Direção (GPS)';
+                }
+            } catch (error) {
+                statusEl.textContent = 'Erro ao iniciar sensor de orientação.';
+                directionEl.parentElement.querySelector('.label').textContent = 'Direção (GPS)';
+            }
+
+            // --- Leitura do Giroscópio (sem filtro, como solicitado) ---
             if ('Gyroscope' in window) {
                 try {
                     const gyroscope = new Gyroscope({ frequency: 20 });
@@ -118,17 +129,8 @@
                         if (gyroscope.z !== null) {
                             lastRawGyroValue = gyroscope.z;
                             const correctedValue = gyroscope.z - gyroOffset;
+                            gyroReadings.push({ value: correctedValue, timestamp: Date.now() });
                             
-                            // --- NOVO: FILTRO DE DADOS ---
-                            // Apenas adiciona a leitura ao array se seu valor absoluto
-                            // for MENOR ou IGUAL ao limiar definido.
-                            if (Math.abs(correctedValue) <= GYRO_THRESHOLD_RAD_SEC) {
-                                gyroReadings.push({ value: correctedValue, timestamp: Date.now() });
-                            }
-                            // Leituras acima de 100°/min são simplesmente ignoradas.
-                            
-                            // O resto da lógica continua igual, mas agora opera sobre um
-                            // array de leituras já filtrado.
                             const avgRadPerSec = calculateAverage(gyroReadings);
                             const avgDegPerMin = avgRadPerSec * (180 / Math.PI) * 60;
                             
@@ -140,85 +142,68 @@
                 } catch (error) { /* ... */ }
             }
 
-            // --- Leitura do GPS (lógica sem alteração) ---
+            // --- Leitura do GPS (usado para Posição, Mapa e Velocidade) ---
             if ('geolocation' in navigator) {
                 navigator.geolocation.watchPosition(
-                    (position) => { /* ... sem alteração ... */ },
+                    (position) => {
+                        if (statusEl.textContent.startsWith('Erro')) statusEl.textContent = 'Sensores ativos.';
+                        dataContainer.style.display = 'block';
+                        mapContainer.style.display = 'block';
+                        
+                        const { latitude, longitude, speed, heading } = position.coords;
+                        speedEl.textContent = (speed === null) ? "0.00" : (speed * 1.94384).toFixed(2);
+                        
+                        // Apenas usa o heading do GPS se o sensor de orientação não funcionou
+                        if (!('AbsoluteOrientationSensor' in window)) {
+                           if (heading !== null && speed > 0.1) {
+                               directionEl.textContent = Math.round(heading);
+                           } else {
+                               directionEl.textContent = '---';
+                           }
+                        }
+                        
+                        if (!isMapInitialized) {
+                           // ... lógica de inicialização do mapa
+                        } else {
+                           // ... lógica de atualização do mapa
+                        }
+                    },
                     (error) => { statusEl.textContent = `Erro de GPS: ${error.message}`; },
                     { enableHighAccuracy: true, maximumAge: 0 }
                 );
             }
         }
 
-        // --- Colando as funções e listeners que não foram alterados para o código ficar completo ---
+        // --- Colando as funções e listeners que não foram alterados ---
         startButton.addEventListener('click', startSensors);
         zeroButton.addEventListener('click', zeroGyro);
-        radiusSlider.addEventListener('input', (event) => {
-            const newRadius = event.target.value;
-            radiusValueEl.textContent = newRadius;
-            if (accuracyCircle) {
-                accuracyCircle.setRadius(parseInt(newRadius, 10));
-            }
-        });
-        function calculateAverage(readings) {
-            const now = Date.now();
-            const recentReadings = readings.filter(r => now - r.timestamp < AVERAGE_WINDOW);
-            if (recentReadings.length === 0) return 0;
-            const sum = recentReadings.reduce((acc, r) => acc + r.value, 0);
-            return sum / recentReadings.length;
-        }
-        function zeroGyro() {
-            gyroOffset = lastRawGyroValue;
-            manualTurnRateOffset = 0;
-            updateTurnRateDisplay();
-            statusEl.textContent = 'Sensor de giro zerado!';
-            setTimeout(() => { if (statusEl.textContent === 'Sensor de giro zerado!') statusEl.textContent = 'Sensores ativos.'; }, 2000);
-        }
-        function updateTurnRateDisplay() {
-            const finalValue = latestSensorTurnRate + manualTurnRateOffset;
-            turnRateEl.textContent = finalValue.toFixed(1);
-        }
+        radiusSlider.addEventListener('input', (event) => { const newRadius = event.target.value; radiusValueEl.textContent = newRadius; if (accuracyCircle) { accuracyCircle.setRadius(parseInt(newRadius, 10)); } });
+        function calculateAverage(readings) { const now = Date.now(); const recentReadings = readings.filter(r => now - r.timestamp < AVERAGE_WINDOW); if (recentReadings.length === 0) return 0; const sum = recentReadings.reduce((acc, r) => acc + r.value, 0); return sum / recentReadings.length; }
+        function zeroGyro() { gyroOffset = lastRawGyroValue; manualTurnRateOffset = 0; updateTurnRateDisplay(); statusEl.textContent = 'Sensor de giro zerado!'; setTimeout(() => { if (statusEl.textContent === 'Sensor de giro zerado!') statusEl.textContent = 'Sensores ativos.'; }, 2000); }
+        function updateTurnRateDisplay() { const finalValue = latestSensorTurnRate + manualTurnRateOffset; turnRateEl.textContent = finalValue.toFixed(1); }
         btnPlus.addEventListener('click', (e) => { e.stopPropagation(); manualTurnRateOffset += 0.1; updateTurnRateDisplay(); });
         btnMinus.addEventListener('click', (e) => { e.stopPropagation(); manualTurnRateOffset -= 0.1; updateTurnRateDisplay(); });
-        // --- Código do GPS ---
-        if ('geolocation' in navigator) {
-            navigator.geolocation.watchPosition(
-                (position) => {
-                    if (statusEl.textContent !== 'Sensor de giro zerado!') statusEl.textContent = 'Sensores ativos.';
-                    if(dataContainer.style.display === 'none') {
-                        dataContainer.style.display = 'block';
-                        mapContainer.style.display = 'block';
-                    }
-                    
-                    const { latitude, longitude, speed, heading } = position.coords;
-                    speedEl.textContent = (speed === null) ? "0.00" : (speed * 1.94384).toFixed(2);
-                    if (heading !== null && speed > 0.1) {
-                        directionEl.textContent = Math.round(heading);
-                    } else {
-                        directionEl.textContent = '---';
-                    }
-                    if (!isMapInitialized) {
-                       map = L.map('map').setView([latitude, longitude], 16);
-                       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                       }).addTo(map);
-                       positionMarker = L.marker([latitude, longitude]).addTo(map).bindPopup('Sua Posição').openPopup();
-                       accuracyCircle = L.circle([latitude, longitude], {
-                           color: 'blue', fillColor: '#03a9f4', fillOpacity: 0.2,
-                           radius: parseInt(radiusSlider.value, 10)
-                       }).addTo(map);
-                       isMapInitialized = true;
-                    } else {
-                       const latLng = [latitude, longitude];
-                       positionMarker.setLatLng(latLng);
-                       accuracyCircle.setLatLng(latLng);
-                       map.panTo(latLng);
-                    }
-                },
-                (error) => { statusEl.textContent = `Erro de GPS: ${error.message}`; },
-                { enableHighAccuracy: true, maximumAge: 0 }
-            );
-        }
+        // --- Código do Mapa ---
+        const initMapAndWatch = navigator.geolocation.watchPosition; // Para usar na função startSensors
+        navigator.geolocation.watchPosition = (success, error, options) => {
+            const watchId = initMapAndWatch.call(navigator.geolocation, (position) => {
+                if (!isMapInitialized) {
+                    map = L.map('map').setView([position.coords.latitude, position.coords.longitude], 16);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(map);
+                    positionMarker = L.marker([position.coords.latitude, position.coords.longitude]).addTo(map).bindPopup('Sua Posição').openPopup();
+                    accuracyCircle = L.circle([position.coords.latitude, position.coords.longitude], { color: 'blue', fillColor: '#03a9f4', fillOpacity: 0.2, radius: parseInt(radiusSlider.value, 10) }).addTo(map);
+                    isMapInitialized = true;
+                } else {
+                    const latLng = [position.coords.latitude, position.coords.longitude];
+                    positionMarker.setLatLng(latLng);
+                    accuracyCircle.setLatLng(latLng);
+                    map.panTo(latLng);
+                }
+                success(position);
+            }, error, options);
+            return watchId;
+        };
+
     </script>
 </body>
 </html>
