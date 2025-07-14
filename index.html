@@ -10,65 +10,16 @@
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap');
-        html, body {
-            height: 100%;
-            margin: 0;
-            padding: 0;
-            overflow: hidden; /* Evita barras de rolagem */
-        }
-        body {
-            font-family: 'Roboto Mono', monospace;
-            background-color: #1a1a1a;
-            color: #f0f0f0;
-            display: flex;
-            flex-direction: column;
-        }
-        .container {
-            width: 100%;
-            margin: 0 auto;
-            display: flex;
-            flex-direction: column;
-            flex-grow: 1; /* Faz o container ocupar o espaço disponível */
-        }
-        .header {
-            text-align: center;
-            padding: 10px;
-        }
-        h1 {
-            color: #03a9f4;
-            margin: 0;
-            font-size: 1.5em;
-        }
-        #map-container {
-            flex-grow: 1; /* Faz o mapa ocupar o máximo de espaço vertical */
-            display: none;
-        }
-        #map {
-            height: 100%; /* Ocupa 100% do container pai */
-            width: 100%;
-            background-color: #555;
-        }
-        .footer {
-            padding: 15px;
-            text-align: center;
-            background-color: #222;
-        }
-        .button {
-            color: white;
-            padding: 15px 25px;
-            border: none;
-            border-radius: 5px;
-            font-size: 1.1em;
-            cursor: pointer;
-            font-family: 'Roboto Mono', monospace;
-            background-color: #03a9f4;
-        }
-        #status {
-            margin-top: 10px;
-            color: #ffc107;
-            font-size: 0.9em;
-            min-height: 20px;
-        }
+        html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
+        body { font-family: 'Roboto Mono', monospace; background-color: #1a1a1a; color: #f0f0f0; display: flex; flex-direction: column; }
+        .container { width: 100%; margin: 0 auto; display: flex; flex-direction: column; flex-grow: 1; }
+        .header { text-align: center; padding: 10px; }
+        h1 { color: #03a9f4; margin: 0; font-size: 1.5em; }
+        #map-container { flex-grow: 1; display: block; background-color: #333; } /* Começa visível para evitar problemas */
+        #map { height: 100%; width: 100%; }
+        .footer { padding: 15px; text-align: center; background-color: #222; }
+        .button { color: white; padding: 15px 25px; border: none; border-radius: 5px; font-size: 1.1em; cursor: pointer; font-family: 'Roboto Mono', monospace; background-color: #03a9f4; }
+        #status { margin-top: 10px; color: #ffc107; font-size: 0.9em; min-height: 20px; }
     </style>
 </head>
 <body>
@@ -89,6 +40,9 @@
     </div>
 
     <script>
+        // --- ALERTA DE DIAGNÓSTICO 1 ---
+        alert("Diagnóstico 1: Script está sendo executado.");
+
         // --- Elementos da UI ---
         const statusEl = document.getElementById('status');
         const startButton = document.getElementById('startButton');
@@ -99,11 +53,63 @@
         let isMapInitialized = false;
 
         function startSensors() {
+            // --- ALERTA DE DIAGNÓSTICO 3 ---
+            alert("Diagnóstico 3: Função startSensors() foi chamada com sucesso!");
+
             startButton.style.display = 'none';
-            mapContainer.style.display = 'block';
             statusEl.textContent = 'Solicitando permissão de GPS...';
 
             if ('geolocation' in navigator) {
                 navigator.geolocation.watchPosition(
                     (position) => {
                         statusEl.textContent = `GPS ativo. Precisão: ${position.coords.accuracy.toFixed(0)}m`;
+                        const { latitude, longitude, accuracy } = position.coords;
+                        const latLng = [latitude, longitude];
+
+                        if (!isMapInitialized) {
+                            const imageUrl = '1841.png'; 
+                            const imageBounds = [
+                                [-26.8667, -48.7000], // Canto Superior-Esquerdo
+                                [-26.9500, -48.5500]  // Canto Inferior-Direito
+                            ];
+
+                            map = L.map('map').fitBounds(imageBounds);
+                            L.imageOverlay(imageUrl, imageBounds).addTo(map);
+
+                            positionMarker = L.marker(latLng, {
+                                icon: L.icon({
+                                    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+                                    iconSize: [25, 41],
+                                    iconAnchor: [12, 41]
+                                })
+                            }).addTo(map);
+
+                            accuracyCircle = L.circle(latLng, { 
+                                radius: accuracy, weight: 1, color: '#03a9f4', fillOpacity: 0.1
+                            }).addTo(map);
+                            
+                            isMapInitialized = true;
+                        } else {
+                            positionMarker.setLatLng(latLng);
+                            accuracyCircle.setLatLng(latLng).setRadius(accuracy);
+                        }
+                    },
+                    (error) => { statusEl.textContent = `Erro de GPS: ${error.message}`; },
+                    { enableHighAccuracy: true, maximumAge: 0 }
+                );
+            } else {
+                statusEl.textContent = 'Geolocalização não é suportada.';
+                alert("Seu navegador não tem suporte para Geolocalização.");
+            }
+        }
+        
+        if (startButton) {
+            // --- ALERTA DE DIAGNÓSTICO 2 ---
+            alert("Diagnóstico 2: Botão 'Iniciar' encontrado. Anexando evento de clique.");
+            startButton.addEventListener('click', startSensors);
+        } else {
+            alert("ERRO CRÍTICO: Não foi possível encontrar o botão 'startButton' na página.");
+        }
+    </script>
+</body>
+</html>
